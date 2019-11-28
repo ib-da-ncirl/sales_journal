@@ -1,0 +1,35 @@
+# The format of this configuration file is:
+# <name of plot>
+#   type:        the type of plot to do; valid options are 'line' ....
+#   sql:         the sql select statement to retrieve the data from the database
+#   header:      list of names to apply to columns of data from the database
+#     - col1_name
+#     - col2_name
+#   <col_name>:  the name a column in the data, followed by transform entries, valid
+#                options are :-
+#     to_datetime: <format>    transform column data to dates, using <format> in pandas.to_datetime()
+#   title:       title for the plot
+#   x:           data column to use for x axis
+#   y:           data column to use for y axis
+#   labels:      list of labels to use
+#     - col1_name: label for column named col1_name
+#     - col2_name: label for column named col2_name
+#   output_path: the output file path
+#
+
+entitybaseamount_by_salesdate:
+  type: line
+  sql: SELECT salesdate, entitybaseamount from SALES_DATA;
+  header:
+    - salesdate
+    - entitybaseamount
+  salesdate:
+    to_datetime: '%Y-%m-%d'
+  title: Entity Base Amount
+  x: salesdate
+  y: entitybaseamount
+  labels:
+    salesdate: Date
+    entitybaseamount: Amount (USD)
+  output_path: output/entitybaseamount_by_salesdate.jpg
+

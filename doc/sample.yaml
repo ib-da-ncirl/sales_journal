@@ -1,0 +1,53 @@
+# This is a sample configuration file for the application. It includes:
+# - database configurations
+# - application configuration
+
+# https://docs.ansible.com/ansible/latest/reference_appendices/YAMLSyntax.html
+
+# The application utilises the db_toolkit package (https://github.com/ib-da-ncirl/db_toolkit) for database connectivity.
+# Please verify the latest configuration options in
+# sample.yaml (https://github.com/ib-da-ncirl/db_toolkit/blob/master/db_toolkit/docs/sample.yaml)
+
+
+# The required keys are as follows:
+#   user:     user name used to authenticate
+#   password: password used to authenticate
+#   dbname:   the database name
+# Optional keys may be set in the configuration file or on an instance, and are as follows:
+#   host: database host address (defaults to UNIX socket if not provided)
+#   port: connection port number (defaults to 5432 if not provided)
+postgresdb:
+  user: myuser
+  password: mypassword
+  dbname: mydatabase
+  host: mypostgres.server.com
+  port: 5432
+
+
+# plotly requires its own specific version of orca, in the event that there is another version installed, and it is
+# detected, the correct version to use may be specified here
+plotly:
+  orca:
+    executable: /path/to/orca
+
+
+sales_journal:
+  # directory containing database csv files
+  db_data_path: data
+  # csv file containing info regarding sales_journal table
+  sales_data_desc: cfg/sales_data_desc.csv
+
+  # regex to match csv filename of the form; ??_DD-MM-YYYY-to-DD-MM-YYYY.csv
+  set_pattern: '^(\w+)_(\d{2}-\d{2}-\d{4})-to-(\d{2}-\d{2}-\d{4})\.csv'
+  # regex to match common part of filename of the form; ???XX_DD-MM-YYYY-to-DD-MM-YYYY???
+  set_link_pattern: '.*(\d{2}-\d{2}-\d{4}-to-\d{2}-\d{2}-\d{4}).*'
+  # regex to match sales journal filename of the form; SJ_???????
+  set_sj_pattern: '^SJ_.*'
+  # regex to match promos filename of the form; SJPromo_???????
+  set_sjpromo_pattern: '^SJPromo_.*'
+
+  # file containing configuration for plots
+  plots_cfg: cfg/plots.yaml
+
+  # set to a pipeline name to run that pipeline, or set to 'menu' to allow pipeline selection from a menu
+  pipeline: menu
