@@ -22,6 +22,7 @@
 from dagster import execute_pipeline, pipeline, ModeDefinition
 from dagster_toolkit.postgres import (
     postgres_warehouse_resource,
+    query_table,
 )
 from dagster_toolkit.files import (
     load_csv,
@@ -30,15 +31,19 @@ from dagster_toolkit.environ import (
     EnvironmentDict,
 )
 from solids import (
-    upload_table,
+    generate_table_fields_str,
+    create_tables,
+    upload_sales_table,
     get_table_desc_by_type,
     transform_sets_df,
     transform_table_desc_df,
     load_list_of_csv_files,
     create_csv_file_sets,
-    read_csv_file_sets,
+    read_sj_csv_file_sets,
     merge_promo_csv_file_sets,
-)
+    generate_tracking_table_fields_str,
+    upload_tracking_table,
+    generate_dtypes)
 
 
 @pipeline(
@@ -57,22 +62,37 @@ def csv_to_postgres_pipeline():
     """
     # load and process the postgres table information
     table_desc = transform_table_desc_df(
-        load_csv()
+        load_csv()  # TODO should supply dtypes
     )
     table_desc_by_type = get_table_desc_by_type(table_desc)
+    dtypes_by_root = generate_dtypes(table_desc, table_desc_by_type)
+
+    # generate column string for creation and insert queries, for the sales_data and tracking_data tables
+    create_data_columns, insert_data_columns = generate_table_fields_str(table_desc)
+    create_tracking_columns, insert_tracking_columns = generate_tracking_table_fields_str()
+
+    # create sales_data and tracking_data tables
+    create_tables(create_data_columns, create_tracking_columns)
+
+    # get previously uploaded file sets info
+    prev_uploaded = query_table()
 
     # load the csv files in to sets, so that the csv files that relate to a common export are all together and load them
     sets = create_csv_file_sets(
-        load_list_of_csv_files()
+        load_list_of_csv_files(), prev_uploaded
     )
-    sets_list, sets_df = read_csv_file_sets(sets, table_desc_by_type)
+
+    # read the sales journal
+    sets_list, sets_df = read_sj_csv_file_sets(sets, dtypes_by_root)
 
     # merge the promo info into the sales journal
-    sets_list, sets_df = merge_promo_csv_file_sets(sets_list, sets_df)
+    sets_list, sets_df = merge_promo_csv_file_sets(sets_list, sets_df, dtypes_by_root)
 
-    sets_df = transform_sets_df(sets_df, table_desc_by_type)
+    sets_df = transform_sets_df(sets_df, table_desc, table_desc_by_type)
 
-    upload_table(sets_df, table_desc)
+    upload_results = upload_sales_table(sets_df, insert_data_columns)
+
+    upload_tracking_table(upload_results, insert_tracking_columns)
 
 
 def execute_csv_to_postgres_pipeline(sj_config: dict, postgres_warehouse: dict):
@@ -81,20 +101,37 @@ def execute_csv_to_postgres_pipeline(sj_config: dict, postgres_warehouse: dict):
     :param sj_config: app configuration
     :param postgres_warehouse: postgres server resource
     """
+
+    # .add_solid_input('does_psql_table_exist', 'name', sj_config['tracking_table_query']) \
+
     # environment dictionary
+    regex_patterns = sj_config['regex_patterns']
     env_dict = EnvironmentDict() \
         .add_solid_input('load_csv', 'csv_path', sj_config['sales_data_desc']) \
         .add_solid_input('load_csv', 'kwargs', {}, is_kwargs=True) \
-        .add_solid_input('load_list_of_csv_files', 'db_data_path', sj_config['db_data_path']) \
-        .add_solid_input('create_csv_file_sets', 'set_pattern', sj_config['set_pattern']) \
-        .add_solid_input('create_csv_file_sets', 'set_link_pattern', sj_config['set_link_pattern']) \
-        .add_solid_input('read_csv_file_sets', 'set_item_pattern', sj_config['set_sj_pattern']) \
         .add_solid('transform_table_desc_df') \
+        .add_solid('generate_table_fields_str') \
+        .add_solid_input('generate_tracking_table_fields_str',
+                         'tracking_data_columns', sj_config['tracking_data_columns']) \
+        .add_composite_solid_input('create_tables', 'create_data_table', 'table_name',
+                                   sj_config['sales_data_table']) \
+        .add_composite_solid_input('create_tables', 'create_tracking_table', 'table_name',
+                                   sj_config['tracking_data_table']) \
+        .add_solid_input('query_table', 'sql', sj_config['tracking_table_query']) \
+        .add_solid_input('load_list_of_csv_files', 'db_data_path', sj_config['db_data_path']) \
+        .add_solid_input('load_list_of_csv_files', 'date_in_name_pattern', sj_config['date_in_name_pattern']) \
+        .add_solid_input('load_list_of_csv_files', 'date_in_name_format', sj_config['date_in_name_format']) \
+        .add_solid_input('create_csv_file_sets', 'regex_patterns', regex_patterns) \
+        .add_solid_input('read_sj_csv_file_sets', 'regex_patterns', regex_patterns) \
+        .add_solid_input('merge_promo_csv_file_sets', 'regex_patterns', regex_patterns) \
         .add_solid('transform_sets_df') \
-        .add_solid_input('merge_promo_csv_file_sets', 'set_item_pattern', sj_config['set_sjpromo_pattern']) \
-        .add_solid_input('upload_table', 'table_name', 'sales_data') \
+        .add_solid_input('upload_sales_table', 'table_name', sj_config['sales_data_table']) \
+        .add_solid_input('upload_tracking_table', 'table_name', sj_config['tracking_data_table']) \
         .add_resource('postgres_warehouse', postgres_warehouse) \
         .build()
+
+    print(env_dict)
+
     result = execute_pipeline(csv_to_postgres_pipeline, environment_dict=env_dict)
     assert result.success
 

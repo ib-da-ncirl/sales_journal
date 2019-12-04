@@ -32,6 +32,8 @@ from pipelines import (
     execute_csv_to_postgres_pipeline,
     execute_postgres_to_plot_pipeline
 )
+from pipelines.clean_pipelines import execute_clean_sales_data_postgres_pipeline
+
 """
 """
 
@@ -73,6 +75,9 @@ if __name__ == '__main__':
         execute_postgres_to_plot_pipeline(app_cfg['sales_journal'], plotly_cfg, postgres_warehouse,
                                           'entitybaseamount_by_salesdate')
 
+    def call_execute_clean_sales_data_postgres_pipeline():
+        execute_clean_sales_data_postgres_pipeline(app_cfg['sales_journal'], postgres_warehouse)
+
 
     pipeline = app_cfg['sales_journal']['pipeline']
     if pipeline == 'menu':
@@ -80,6 +85,7 @@ if __name__ == '__main__':
         menu.set_options([
             ("Upload sales data to Postgres", call_execute_csv_to_postgres_pipeline),
             ("Plot entitybaseamount_by_salesdate", call_execute_postgres_to_plot_pipeline),
+            ("Clean sales_data from server", call_execute_clean_sales_data_postgres_pipeline),
             ("Exit", Menu.CLOSE)
         ])
         menu.set_title("SalesJournal Data Processing Menu")
@@ -89,5 +95,7 @@ if __name__ == '__main__':
         call_execute_csv_to_postgres_pipeline()
     elif pipeline == 'postgres_to_plot_pipeline':
         call_execute_postgres_to_plot_pipeline()
+    elif pipeline == 'clean_sales_data_postgres_pipeline':
+        call_execute_clean_sales_data_postgres_pipeline()
 
 

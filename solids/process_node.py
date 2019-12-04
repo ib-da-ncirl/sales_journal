@@ -38,11 +38,11 @@ from dagster_pandas import DataFrame
 @lambda_solid()
 def get_table_desc_by_type(table_desc: DataFrame) -> Dict:
     """
-    Perform any necessary transformations on the sets panda DataFrames
+    Group the entries in the table description by field type
     :param table_desc: pandas DataFrame containing details of the database table
-    :return: dict of pandas DataFrames of data types in database table
-    :rtype: dict
+    :return: dict of pandas DataFrames of data types in database table with data type as the key
     """
+    # TODO should really return SERIAL (and bigint) as well
     return {
         'date': table_desc[table_desc['datatype'].str.lower() == 'date'],
         'timestamp': table_desc[table_desc['datatype'].str.lower() == 'timestamp'],
@@ -54,17 +54,18 @@ def get_table_desc_by_type(table_desc: DataFrame) -> Dict:
 
 
 @solid
-def transform_sets_df(context, sets_df: Dict, table_desc_by_type: Dict) -> Dict:
+def transform_sets_df(context, sets_df: Dict, table_desc: DataFrame, table_desc_by_type: Dict) -> Dict:
     """
     Perform any necessary transformations on the sets panda DataFrames
     :param context: execution context
-    :param sets_df: dict of pandas DataFrames with set ids as key
-    :param table_desc_by_type: dict of pandas DataFrames of data types in database table
+    :param sets_df: dict of DataSet with set ids as key
+    :param table_desc: pandas DataFrame containing details of the database table
+    :param table_desc_by_type: dict of pandas DataFrames of data types in database table with data type as the key
     :return: dict of pandas DataFrames with set ids as key
     :rtype: dict
     """
     for set_id in sets_df.keys():
-        set_df = sets_df[set_id]
+        set_df = sets_df[set_id].df
 
         # generate a list of the names of fields with the date types
         # also a list of formats for the date fields
@@ -78,15 +79,29 @@ def transform_sets_df(context, sets_df: Dict, table_desc_by_type: Dict) -> Dict:
         text_fields = np.concatenate((table_desc_by_type['text']['field'].values,
                                      table_desc_by_type['varchar']['field'].values))
 
+        # TODO needs work, type coercion is really only for the types known to need it rather than a general method
         for label, content in set_df.items():   # Iterator over (column name, Series) pairs
+            row = table_desc[table_desc['field'] == label].iloc[0]     # will only be one
+            load_type = row['loadtype'].lower()
+            if load_type != '':
+                # loaded as different type to required
+                new_type = row['datatype'].lower()
+            else:
+                new_type = ''
+
             if label in date_fields:
-                # transform date strings to dates
-                try:
-                    fidx = date_fields.index(label)
-                    set_df[label] = pd.to_datetime(set_df[label], format=date_fields_formats[fidx])
-                except ValueError:
-                    pass    # ignore, no format was found
+                if new_type == 'timestamp':
+                    # transform date strings to dates
+                    try:
+                        fidx = date_fields.index(label)
+                        set_df[label] = pd.to_datetime(set_df[label], format=date_fields_formats[fidx])
+                    except ValueError:
+                        pass    # ignore, no format was found
             elif label in int_fields:
+                if new_type != '' and load_type == 'text':
+                    # replace nan and coerce to int
+                    content.fillna('0', inplace=True)
+                    set_df[label] = set_df[label].astype(int)
                 # transform empty integer fields
                 content.fillna(0, inplace=True)
             elif label in real_fields:

@@ -19,54 +19,23 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from .create_table import (
-    create_tables,
-)
-from .drop_table import (
-    drop_tables,
-)
-from .sales_table import (
-    generate_table_fields_str,
-    upload_sales_table,
-)
-from .process_node import (
-    get_table_desc_by_type,
-    transform_sets_df,
-    transform_table_desc_df,
-)
-from .read_cvs_node import (
-    load_list_of_csv_files,
-    create_csv_file_sets,
-    generate_dtypes,
-    read_sj_csv_file_sets,
-    merge_promo_csv_file_sets,
-)
-from .tracking_table import (
-    generate_tracking_table_fields_str,
-    upload_tracking_table,
+from dagster import (
+    Failure,
+    composite_solid
 )
 
+from dagster_toolkit.postgres import drop_table
 
-# if somebody does "from sales_journal.solids import *", this is what they will
-# be able to access:
-__all__ = [
-    'create_tables',
 
-    'drop_tables',
+@composite_solid()
+def drop_tables():
+    """
+    Drop postgres tables
+    """
+    drop_sales_table = drop_table.alias('drop_sales_table')
+    drop_tracking_table = drop_table.alias('drop_tracking_table')
 
-    'generate_table_fields_str',
-    'upload_sales_table',
-
-    'get_table_desc_by_type',
-    'transform_sets_df',
-    'transform_table_desc_df',
-
-    'load_list_of_csv_files',
-    'create_csv_file_sets',
-    'generate_dtypes',
-    'read_sj_csv_file_sets',
-    'merge_promo_csv_file_sets',
-
-    'generate_tracking_table_fields_str',
-    'upload_tracking_table',
-]
+    if not drop_sales_table():
+        raise Failure('Sales table not dropped')
+    if not drop_tracking_table():
+        raise Failure('Tracking table not dropped')
