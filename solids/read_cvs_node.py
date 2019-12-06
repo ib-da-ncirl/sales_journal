@@ -147,7 +147,9 @@ def create_csv_file_sets(context, files_lst: List, prev_uploaded: Optional[DataF
                     context.log.info(f'Ignoring previously loaded data set: {set_id}')
                 else:
                     # https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.to_dict.html
-                    sets_list.append({set_id: set_entity.to_dict('records')})
+                    sets_list.append({
+                        set_id: set_entity.to_dict('records')
+                    })
             else:
                 context.log.info(f"Discarding inconsistent data set '{set_id}': {counts}")
         else:
@@ -340,6 +342,7 @@ def merge_promo_csv_file_sets(context, sets_list: List, sets_df: Dict, dtypes_by
     :return: dict of data with set ids as key and DataSet as value
     """
     count = 0
+    promo_seq_bug_fix_date = datetime(2019, 4, 1)
     regex_patterns_dict = regex_patterns['value']
     regex_item = re.compile(regex_patterns_dict['set_sjpromo_pattern'])
     for set_entry in sets_list:  # dict in list
@@ -361,6 +364,12 @@ def merge_promo_csv_file_sets(context, sets_list: List, sets_df: Dict, dtypes_by
                     df = pd.read_csv(entry['path'], dtype=dtypes)
 
                     df.rename(columns=str.strip, inplace=True)  # remove any whitespace in column names
+
+                    # there was a bug in the TDP code which generated incorrect SEQUENCE values in promo files prior to
+                    # April 2019. These values need to be corrected by being replaced with 1, as only one promo may be
+                    # applied at a time
+                    if entry['start_date'] < promo_seq_bug_fix_date:
+                        df['SEQUENCE'] = 1
 
                     # SJ has the following header
                     # ID,SOURCE,SALESDATE,RESVCODE,RESVCOMPSEQUENCE,ENTRYTYPE,SEQUENCE,RESVCOMPTYPE,RESVCOMPSUBTYPE,DESCRIPTION,REMOTEREFTYPE,REMOTEREFCODE,DOCUMENTED,FARECONSTRUCTION,PROVIDERCODE, CUSTOMERPROFILE,AGENCY,AGENT,DOCTYPE,TRANSACTIONCURRENCYCODE,TRANSACTIONBASEAMOUNT,TRANSACTIONTOTALTAXAMOUNT,ENTITYCURRENCYCODE,ENTITYBASEAMOUNT,ENTITYTOTALTAXAMOUNT, TRANSACTIONMILESAMOUNTPAID,TRANSACTIONMONEYAMOUNTPAID,CUSTOMERTYPE,MARKET,PAYMENTTYPE,TRAVELERTYPE,ENTITYTOTALPROMOTIONAMOUNT,INTERNALAGENT, FIRSTDATEOFTRAVEL,LASTDATEOFTRAVEL,PROVIDERNAME,FEETYPEDESCRIPTION, FEESUBTYPEDESCRIPTION,NONREFUNDABLE,REFERENCEDCOMPONENTTYPE,TRANSACTIONBASEREDEMPTIONAMT,TRANSACTIONBASEREDEMPTIONEQUIV,INVOICED, LOYALTYNUMBER

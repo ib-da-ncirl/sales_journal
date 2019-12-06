@@ -18,14 +18,18 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
+import re
+from datetime import date, datetime
 
+import math
 import numpy as np
 import pandas as pd
+import sys
 from dagster import (
     solid,
     lambda_solid,
     Dict,
-)
+    Failure)
 from dagster_pandas import DataFrame
 
 
@@ -48,14 +52,53 @@ def get_table_desc_by_type(table_desc: DataFrame) -> Dict:
     }
 
 
+@lambda_solid()
+def get_table_desc_type_limits(table_desc: DataFrame) -> Dict:
+    """
+    Get the type limits for the entries in the table description
+    :param table_desc: pandas DataFrame containing details of the database table
+    :return: dict of type limits with field name as the key
+    """
+    type_values = {
+        'date': {'min_val': date.min, 'max_val': date.max, 'max_size': sys.getsizeof(date.min)},
+        'timestamp': {'min_val': datetime.min, 'max_val': datetime.max, 'max_size': sys.getsizeof(datetime.min)},
+        'smallint': {'min_val': -0x8000, 'max_val': 0X7fff, 'max_size': 2},
+        'smallserial': {'min_val': -0x8000, 'max_val': 0X7fff, 'max_size': 2},
+        'int': {'min_val': -0x80000000, 'max_val': 0X7fffffff, 'max_size': 4},
+        'serial': {'min_val': -0x80000000, 'max_val': 0X7fffffff, 'max_size': 4},
+        'bigint': {'min_val': -0x8000000000000000, 'max_val': 0X7fffffffffffffff, 'max_size': 8},
+        'bigserial': {'min_val': -0x8000000000000000, 'max_val': 0X7fffffffffffffff, 'max_size': 8},
+        'real': {'min_val': math.exp(-37), 'max_val': math.exp(37), 'max_size': 4},
+        'double precision': {'min_val': math.exp(-307), 'max_val': math.exp(308), 'max_size': 8},
+        'text': {'min_val': 0, 'max_val': 0, 'max_size': 0},
+    }
+    regex = re.compile(r'.*\((\d)+\)')
+    type_limits = {}
+    for idx in range(len(table_desc)):
+        row = table_desc.iloc[idx]
+        row_type = row['datatype'].lower()
+        if row_type in type_values:
+            type_limits[row['field']] = type_values[row_type]
+        elif row_type.startswith('varchar'):
+            match = regex.search(row_type)
+            if match:
+                max_size = int(match.group(1))
+            else:
+                max_size = 0
+            type_limits[row['field']] = {'min_val': 0, 'max_val': 0, 'max_size': max_size}
+    return type_limits
+
+
 @solid
-def transform_sets_df(context, sets_df: Dict, table_desc: DataFrame, table_desc_by_type: Dict) -> Dict:
+def transform_sets_df(context, sets_df: Dict, table_desc: DataFrame, table_desc_by_type: Dict,
+                      table_type_limits: Dict) -> Dict:
     """
     Perform any necessary transformations on the sets panda DataFrames
     :param context: execution context
     :param sets_df: dict of DataSet with set ids as key
     :param table_desc: pandas DataFrame containing details of the database table
     :param table_desc_by_type: dict of pandas DataFrames of data types in database table with data type as the key
+    :param table_type_limits: dict of type limits with field name as the key
     :return: dict of pandas DataFrames with set ids as key
     :rtype: dict
     """
@@ -80,9 +123,10 @@ def transform_sets_df(context, sets_df: Dict, table_desc: DataFrame, table_desc_
         for label, content in set_df.items():   # Iterator over (column name, Series) pairs
             row = table_desc[table_desc['field'] == label].iloc[0]     # will only be one
             load_type = row['loadtype'].lower()
+            data_type = row['datatype'].lower()
             if load_type != '':
                 # loaded as different type to required
-                new_type = row['datatype'].lower()
+                new_type = data_type
             else:
                 new_type = ''
 
@@ -107,6 +151,17 @@ def transform_sets_df(context, sets_df: Dict, table_desc: DataFrame, table_desc_
             elif label in text_fields:
                 # transform empty text field
                 content.fillna('', inplace=True)
+
+            # do check on data to ensure doesn't exceed type limits
+            if data_type.startswith('varchar'):
+                limit = table_type_limits[label]
+                failed = content.str.len() > limit['max_size']
+                if failed.any():
+                    raise Failure(f"Type limit check failure for '{label}': {failed.value_counts()[True]} "
+                                  f"entries exceeded max size {limit['max_size']}")
+            elif data_type != 'text':
+                # TODO min max value checks
+                pass
 
     return sets_df
 

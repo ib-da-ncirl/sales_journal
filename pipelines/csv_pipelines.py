@@ -32,9 +32,9 @@ from dagster_toolkit.environ import (
 )
 from solids import (
     generate_table_fields_str,
-    create_tables,
     upload_sales_table,
     get_table_desc_by_type,
+    get_table_desc_type_limits,
     transform_sets_df,
     transform_table_desc_df,
     load_list_of_csv_files,
@@ -72,6 +72,8 @@ def csv_to_postgres_pipeline():
     table_desc_by_type = get_table_desc_by_type(table_desc)
     dtypes_by_root = generate_dtypes(table_desc, table_desc_by_type)
 
+    table_type_limits = get_table_desc_type_limits(table_desc)
+
     # generate column string for creation and insert queries, for the sales_data and tracking_data tables
     create_data_columns, insert_data_columns = generate_table_fields_str(table_desc)
     create_tracking_columns, insert_tracking_columns = generate_tracking_table_fields_str()
@@ -97,7 +99,7 @@ def csv_to_postgres_pipeline():
     # merge the segs info into the sales journal
     sets_list, sets_df = merge_segs_csv_file_sets(sets_list, sets_df, dtypes_by_root)
 
-    sets_df = transform_sets_df(sets_df, table_desc, table_desc_by_type)
+    sets_df = transform_sets_df(sets_df, table_desc, table_desc_by_type, table_type_limits)
 
     upload_results = upload_sales_table(sets_df, insert_data_columns)
 

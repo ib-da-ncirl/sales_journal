@@ -31,6 +31,7 @@ from .sales_table import (
 )
 from .process_node import (
     get_table_desc_by_type,
+    get_table_desc_type_limits,
     transform_sets_df,
     transform_table_desc_df,
 )
@@ -61,6 +62,7 @@ __all__ = [
     'upload_sales_table',
 
     'get_table_desc_by_type',
+    'get_table_desc_type_limits',
     'transform_sets_df',
     'transform_table_desc_df',
 
