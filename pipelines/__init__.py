@@ -21,10 +21,14 @@
 
 from .csv_pipelines import execute_csv_to_postgres_pipeline
 from .plot_pipelines import execute_postgres_to_plot_pipeline
+from .create_pipelines import execute_create_sales_data_postgres_pipeline
+from .clean_pipelines import execute_clean_sales_data_postgres_pipeline
 
 # if somebody does "from sales_journal.pipelines import *", this is what they will
 # be able to access:
 __all__ = [
     'execute_csv_to_postgres_pipeline',
     'execute_postgres_to_plot_pipeline',
+    'execute_create_sales_data_postgres_pipeline',
+    'execute_clean_sales_data_postgres_pipeline',
 ]

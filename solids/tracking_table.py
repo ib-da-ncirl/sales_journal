@@ -24,7 +24,8 @@ from dagster import (
     Failure,
     Dict,
     String,
-    lambda_solid, composite_solid, OutputDefinition, Output, List)
+    OutputDefinition, Output, Optional, Field, Bool)
+from dagster_pandas import DataFrame
 
 
 @solid(
@@ -66,28 +67,33 @@ def generate_tracking_table_fields_str(context, tracking_data_columns: Dict):
     yield Output(insert_tracking_columns, 'insert_tracking_columns')
 
 
-@solid(required_resource_keys={'postgres_warehouse'})
+@solid(required_resource_keys={'postgres_warehouse'},
+       config={
+           'fatal': Field(
+               Bool,
+               default_value=True,
+               is_optional=True,
+               description='Controls whether exceptions cause a Failure or not',
+           )
+       }
+       )
 def upload_tracking_table(context, results: Dict, insert_columns: String, table_name: String):
     """
     Upload a DataFrame to the Postgres server, creating the table if it doesn't exist
     :param context: execution context
     :param results: dict of results dicts with set ids as key
+             { <set_id>: { 'uploaded': True|False,
+                           'value': { 'fileset': <set_id>,
+                                      'sj_pk_min': min value of sales journal primary key,
+                                      'sj_pk_max': max value of sales journal primary key  }}}
     :param insert_columns: column names for the database table
     :param table_name: name of database table to upload to
     :return: panda DataFrame or None
     :rtype: panda.DataFrame
     """
 
-    # results[set_id] = {
-    #     'uploaded': True,
-    #     'value': {
-    #         # entries must follow order of tracking_data_columns.names from config ignoring the id columnn
-    #         'fileset': set_id,
-    #     }
-    # }
-
     if len(results.keys()) == 0:
-        context.log.info(f'No tracking records to upload to {table_name}')
+        context.log.info(f"No tracking records to upload to '{table_name}'")
     else:
         client = context.resources.postgres_warehouse.get_connection(context)
 
@@ -107,16 +113,25 @@ def upload_tracking_table(context, results: Dict, insert_columns: String, table_
 
                         query = cursor.mogrify(insert_query, list(value.values()))
 
-                        context.log.info(f'Uploading result record for {set_id}')
+                        context.log.info(f"Uploading result record for '{set_id}'")
 
                         cursor.execute(query)
                         client.commit()
 
             except psycopg2.Error as e:
-                context.log.warn(f'Error: {e}')
+                context.log.error(f'Error: {e}')
+                if context.solid_config['fatal']:
+                    raise e
 
             finally:
                 # tidy up
                 cursor.close()
                 client.close_connection()
 
+
+@solid()
+def transform_loaded_records(context, prev_uploaded: Optional[DataFrame], tracking_data_columns: Dict) -> Optional[DataFrame]:
+    if prev_uploaded is not None and len(prev_uploaded) > 0:
+        names = tracking_data_columns['value']['names']
+        prev_uploaded.columns = names
+    return prev_uploaded

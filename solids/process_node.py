@@ -24,13 +24,7 @@ import pandas as pd
 from dagster import (
     solid,
     lambda_solid,
-    composite_solid,
-    Field,
-    String,
-    List,
     Dict,
-    OutputDefinition,
-    Output
 )
 from dagster_pandas import DataFrame
 
@@ -42,12 +36,13 @@ def get_table_desc_by_type(table_desc: DataFrame) -> Dict:
     :param table_desc: pandas DataFrame containing details of the database table
     :return: dict of pandas DataFrames of data types in database table with data type as the key
     """
-    # TODO should really return SERIAL (and bigint) as well
     return {
         'date': table_desc[table_desc['datatype'].str.lower() == 'date'],
         'timestamp': table_desc[table_desc['datatype'].str.lower() == 'timestamp'],
-        'int': table_desc[table_desc['datatype'].str.lower().isin(['integer', 'smallint'])],
+        'int': table_desc[table_desc['datatype'].str.lower().isin(['smallint', 'integer', 'smallserial', 'serial'])],
+        'long': table_desc[table_desc['datatype'].str.lower().isin(['bigint', 'bigserial'])],
         'real': table_desc[table_desc['datatype'].str.lower().isin(['real'])],
+        'double precision': table_desc[table_desc['datatype'].str.lower().isin(['double precision'])],
         'text': table_desc[table_desc['datatype'].str.lower().isin(['text'])],
         'varchar': table_desc[table_desc['datatype'].str.contains('varchar', case=False, regex=False)]
     }
@@ -75,7 +70,9 @@ def transform_sets_df(context, sets_df: Dict, table_desc: DataFrame, table_desc_
                                               table_desc_by_type['timestamp']['format'].values)).tolist()
         # generate numpy arrays of the names of fields with the same type
         int_fields = table_desc_by_type['int']['field'].values
+        long_fields = table_desc_by_type['long']['field'].values
         real_fields = table_desc_by_type['real']['field'].values
+        double_precision_fields = table_desc_by_type['double precision']['field'].values
         text_fields = np.concatenate((table_desc_by_type['text']['field'].values,
                                      table_desc_by_type['varchar']['field'].values))
 
@@ -97,14 +94,14 @@ def transform_sets_df(context, sets_df: Dict, table_desc: DataFrame, table_desc_
                         set_df[label] = pd.to_datetime(set_df[label], format=date_fields_formats[fidx])
                     except ValueError:
                         pass    # ignore, no format was found
-            elif label in int_fields:
+            elif label in int_fields or label in long_fields:
                 if new_type != '' and load_type == 'text':
                     # replace nan and coerce to int
                     content.fillna('0', inplace=True)
-                    set_df[label] = set_df[label].astype(int)
+                    set_df[label] = set_df[label].astype(int)   # no diff between int & long in python 3
                 # transform empty integer fields
                 content.fillna(0, inplace=True)
-            elif label in real_fields:
+            elif label in real_fields or label in double_precision_fields:
                 # transform empty real field
                 content.fillna(0, inplace=True)
             elif label in text_fields:

@@ -29,6 +29,7 @@ from dagster_toolkit.environ import (
 from solids import (
     drop_tables
 )
+import pprint
 
 
 @pipeline(
@@ -66,7 +67,8 @@ def execute_clean_sales_data_postgres_pipeline(sj_config: dict, postgres_warehou
         .add_resource('postgres_warehouse', postgres_warehouse) \
         .build()
 
-    print(env_dict)
+    pp = pprint.PrettyPrinter(indent=2)
+    pp.pprint(env_dict)
 
     result = execute_pipeline(clean_sales_data_postgres_pipeline, environment_dict=env_dict)
     assert result.success

@@ -28,12 +28,14 @@ from datetime import datetime
 class DataSet:
 
     def __init__(self, name: str, path: str, start_date: datetime = None, end_date: datetime = None,
-                 df: DataFrame = None):
+                 df: DataFrame = None, min_id: int = 0, max_id: int = 0):
         self._name = name
         self._path = path
         self._start_date = start_date
         self._end_date = end_date
         self._df = df
+        self._min_id = min_id
+        self._max_id = max_id
 
     @property
     def name(self):
@@ -74,4 +76,20 @@ class DataSet:
     @df.setter
     def df(self, df):
         self._df = df
+
+    @property
+    def min_id(self):
+        return self._min_id
+
+    @df.setter
+    def min_id(self, min_id):
+        self._min_id = min_id
+
+    @property
+    def max_id(self):
+        return self._max_id
+
+    @df.setter
+    def max_id(self, max_id):
+        self._max_id = max_id
 

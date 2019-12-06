@@ -34,8 +34,13 @@ plotly:
 sales_journal:
   # directory containing database csv files
   db_data_path: data
+  # list of data sets to load, other data sets will be ignored, leave blank to load all data sets in 'db_data_path'
+  load_file_sets:
+#    - 01-04-2019-to-01-05-2019
+
   # csv file containing info regarding sales_journal table
   sales_data_desc: cfg/sales_data_desc.csv
+
   # name for sales_journal table in postgres
   sales_data_table: sales_data
   # name for tracking data table in postgres
@@ -46,16 +51,22 @@ sales_journal:
     names:
       - id
       - fileset
+      - sj_pk_min
+      - sj_pk_max
     # create args of columns for uploaded data table in postgres
     defs:
       - SERIAL PRIMARY KEY
       - TEXT
+      - BIGINT
+      - BIGINT
     # is column value auto created?
     auto:
       - true
       - false
+      - false
+      - false
   # query to get previously uploaded files
-  tracking_table_query: SELECT fileset FROM tracking_data;
+  tracking_table_query: SELECT * FROM tracking_data;
 
   regex_patterns:
     # regex to match csv and gz csv filename of the form; ??_DD-MM-YYYY-to-DD-MM-YYYY.csv or ??_DD-MM-YYYY-to-DD-MM-YYYY.csv.gz

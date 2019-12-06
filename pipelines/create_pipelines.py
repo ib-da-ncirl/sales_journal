@@ -22,15 +22,18 @@
 from dagster import execute_pipeline, pipeline, ModeDefinition
 from dagster_toolkit.postgres import (
     postgres_warehouse_resource,
-    query_table,
+)
+from dagster_toolkit.files import (
+    load_csv,
 )
 from dagster_toolkit.environ import (
     EnvironmentDict,
 )
-from plot import (
-    initialise_plot,
-    transform_plot_data,
-    process_plot
+from solids import (
+    generate_table_fields_str,
+    create_tables,
+    transform_table_desc_df,
+    generate_tracking_table_fields_str,
 )
 import pprint
 
@@ -45,40 +48,46 @@ import pprint
         )
     ]
 )
-def postgres_to_plot_pipeline():
+def create_sales_data_postgres_pipeline():
     """
-    Definition of the pipeline to plot
+    Definition of the pipeline to create the sales journal tables in Postgres
     """
-    plot_config, plot_sql = initialise_plot()
-    process_plot(
-        transform_plot_data(
-            query_table(plot_sql),
-            plot_config
-        ),
-        plot_config
+    # load and process the postgres table information
+    table_desc = transform_table_desc_df(
+        load_csv()  # TODO should supply dtypes
     )
+    # generate column string for creation and insert queries, for the sales_data and tracking_data tables
+    create_data_columns, insert_data_columns = generate_table_fields_str(table_desc)
+    create_tracking_columns, insert_tracking_columns = generate_tracking_table_fields_str()
+
+    # create sales_data and tracking_data tables
+    create_tables(create_data_columns, create_tracking_columns)
 
 
-def execute_postgres_to_plot_pipeline(sj_config: dict, plotly_cfg: str, postgres_warehouse: dict, plot_name: str):
+def execute_create_sales_data_postgres_pipeline(sj_config: dict, postgres_warehouse: dict):
     """
-    Execute the pipeline to create a plot
+    Execute the pipeline to create the sales journal tables in Postgres
     :param sj_config: app configuration
-    :param plotly_cfg: plotly configuration
     :param postgres_warehouse: postgres server resource
-    :param plot_name: name of plot to produce
     """
+
     # environment dictionary
     env_dict = EnvironmentDict() \
-        .add_solid_input('initialise_plot', 'yaml_path', sj_config['plots_cfg']) \
-        .add_solid_input('initialise_plot', 'plot_name', plot_name) \
-        .add_solid('query_table') \
-        .add_solid_input('process_plot', 'plotly_cfg', plotly_cfg) \
+        .add_solid_input('load_csv', 'csv_path', sj_config['sales_data_desc']) \
+        .add_solid_input('load_csv', 'kwargs', {}, is_kwargs=True) \
+        .add_solid('generate_table_fields_str') \
+        .add_solid_input('generate_tracking_table_fields_str',
+                         'tracking_data_columns', sj_config['tracking_data_columns']) \
+        .add_composite_solid_input('create_tables', 'create_data_table', 'table_name',
+                                   sj_config['sales_data_table']) \
+        .add_composite_solid_input('create_tables', 'create_tracking_table', 'table_name',
+                                   sj_config['tracking_data_table']) \
         .add_resource('postgres_warehouse', postgres_warehouse) \
         .build()
 
     pp = pprint.PrettyPrinter(indent=2)
     pp.pprint(env_dict)
 
-    result = execute_pipeline(postgres_to_plot_pipeline, environment_dict=env_dict)
+    result = execute_pipeline(create_sales_data_postgres_pipeline, environment_dict=env_dict)
     assert result.success
 

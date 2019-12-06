@@ -35,14 +35,14 @@ from db_toolkit.misc import test_dir_path
 from misc_sj import DataSet
 from dagster import (
     solid,
-    Field,
     String,
     List,
     Dict,
-    InputDefinition,
     OutputDefinition,
     Output,
-    lambda_solid, Optional)
+    lambda_solid,
+    Optional
+)
 
 
 @solid()
@@ -91,6 +91,7 @@ def create_csv_file_sets(context, files_lst: List, prev_uploaded: Optional[DataF
     :param files_lst: list of dictionaries of file details;
                 {'name': filename, 'path': path including filename,
                  'start_date': start date in filename, 'end_date': end date in filename}
+    :param prev_uploaded: details of previously loaded data sets
     :param regex_patterns: dict of regex pattern representing filenames and file sets
     :return: list of, dictionaries of dictionaries of all the files in an import set;
              [ {set_id1: [{'name': filename1_set1, 'path': path including filename1_set1, ...},
@@ -105,13 +106,14 @@ def create_csv_file_sets(context, files_lst: List, prev_uploaded: Optional[DataF
     # https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.from_records.html#pandas.DataFrame.from_records
     df = pd.DataFrame.from_records(files_lst)
 
+    # add a column with the set link
+    df['set'] = df['name'].str.extract(regex_patterns_dict['set_link_pattern'])
+
     # only files matching set pattern
     # https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.Series.str.contains.html
     all_set_entries = df[df['name'].str.contains(regex_patterns_dict['set_common_pattern'])]
 
     # TODO doesn't currently handle duplicate csv & gz file sets
-    # add a column with the set link
-    all_set_entries['set'] = all_set_entries['name'].str.extract(regex_patterns_dict['set_link_pattern'])
 
     # get unique set identifiers
     set_links = all_set_entries['set'].unique()
@@ -137,15 +139,19 @@ def create_csv_file_sets(context, files_lst: List, prev_uploaded: Optional[DataF
                     break
 
             if set_ok:
-                if prev_uploaded[0].str.contains(set_id, regex=False).all():
+                ignore = False
+                if prev_uploaded is not None and len(prev_uploaded) > 0:
+                    ignore = prev_uploaded['fileset'].isin([set_id]).any()
+
+                if ignore:
                     context.log.info(f'Ignoring previously loaded data set: {set_id}')
                 else:
                     # https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.to_dict.html
                     sets_list.append({set_id: set_entity.to_dict('records')})
             else:
-                context.log.info(f'Discarding inconsistent data set {set_id}: {counts}')
+                context.log.info(f"Discarding inconsistent data set '{set_id}': {counts}")
         else:
-            context.log.info(f'Discarding incomplete data set {set_id}: {counts}')
+            context.log.info(f"Discarding incomplete data set '{set_id}': {counts}")
 
     return sets_list
 
@@ -167,8 +173,12 @@ def generate_dtypes(table_desc: DataFrame, table_desc_by_type: Dict) -> Dict:
             dtype = np.str  # as str for now
         elif fld_type == 'int':
             dtype = np.int32
+        elif fld_type == 'long':
+            dtype = np.int64
         elif fld_type == 'real':
             dtype = np.float32
+        elif fld_type == 'double precision':
+            dtype = np.float64
         else:
             dtype = np.str
         return dtype
@@ -177,9 +187,9 @@ def generate_dtypes(table_desc: DataFrame, table_desc_by_type: Dict) -> Dict:
     for root in roots:
         dtypes[root] = {}
         for field_type in table_desc_by_type.keys():
-            type_df = table_desc_by_type[field_type]    # df of all of a type
+            type_df = table_desc_by_type[field_type]  # df of all of a type
             if len(type_df) > 0:
-                type_df = type_df[type_df['root'].str.contains(root)]   # df of type with required root
+                type_df = type_df[type_df['root'].str.contains(root)]  # df of type with required root
 
                 if len(type_df) > 0:
                     for idx in range(len(type_df)):
@@ -195,13 +205,42 @@ def generate_dtypes(table_desc: DataFrame, table_desc_by_type: Dict) -> Dict:
     return dtypes
 
 
+@solid()
+def filter_load_file_sets(context, sets_list: List, load_file_sets: Dict) -> List:
+    """
+    Filter to detected data sets list to remove data sets not specified in load requirements
+    :param context: execution context
+    :param sets_list: list of, dictionaries of dictionaries of all the files in an import set;
+                 [ {set_id1: [{'name': filename1_set1, 'path': path including filename1_set1, ...},
+                             {'name': filename2_set1, 'path': path including filename2_set1, ...}, ...]},
+                   {set_id2: [{'name': filename1_set2, 'path': path including filename1_set2, ...},
+                              {'name': filename2_set2, 'path': path including filename2_set2, ...}, ...]}, ... ]
+    :param load_file_sets: list of data sets to load, others will be ignored
+    :return: filtered sets list
+    """
+    load_file_sets_list = load_file_sets['value']
+    if load_file_sets_list is not None:
+        filtered = []
+        for set_entry in sets_list:  # dict in list
+            for set_id in set_entry.keys():  # key in dict.keys (there's only one)
+                if set_id not in load_file_sets_list:
+                    context.log.info(f"Ignoring data set '{set_id}' as not in load data set list")
+                    continue
+                else:
+                    filtered.append(set_entry)
+    else:
+        filtered = sets_list
+    return filtered
+
+
 @solid(
     output_defs=[
         OutputDefinition(dagster_type=List, name='sets_list', is_optional=False),
         OutputDefinition(dagster_type=Dict, name='sets_df', is_optional=False),
     ],
 )
-def read_sj_csv_file_sets(context, sets_list: List, dtypes_by_root: Dict, regex_patterns: Dict):
+def read_sj_csv_file_sets(context, sets_list: List, dtypes_by_root: Dict, prev_uploaded: Optional[DataFrame],
+                          regex_patterns: Dict):
     """
     Read the sales journal file in all import sets
     :param context: execution context
@@ -211,6 +250,7 @@ def read_sj_csv_file_sets(context, sets_list: List, dtypes_by_root: Dict, regex_
                    {set_id2: [{'name': filename1_set2, 'path': path including filename1_set2, ...},
                               {'name': filename2_set2, 'path': path including filename2_set2, ...}, ...]}, ... ]
     :param dtypes_by_root: dict of dtypes dicts with root table identifier as the key
+    :param prev_uploaded: details of previously loaded data sets
     :param regex_patterns: dict of regex pattern representing filenames and file sets
     :return: dict of data with set ids as key and DataSet as value
     """
@@ -219,8 +259,9 @@ def read_sj_csv_file_sets(context, sets_list: List, dtypes_by_root: Dict, regex_
     regex_csv_set = re.compile(regex_patterns_dict['set_pattern'])
     regex_gz_set = re.compile(regex_patterns_dict['gz_set_pattern'])
     sets_df = {}
+
     for set_entry in sets_list:  # dict in list
-        for set_id in set_entry.keys():     # key in dict.keys (there's only one)
+        for set_id in set_entry.keys():  # key in dict.keys (there's only one)
             for entry in set_entry[set_id]:  # dict in list
                 if regex_item.search(entry['name']):
                     # found matching file, read it as DataFrame in a dict with set_id as key
@@ -240,12 +281,32 @@ def read_sj_csv_file_sets(context, sets_list: List, dtypes_by_root: Dict, regex_
                                 filepath_or_buffer = GzipFile(entry['path'])
                             else:
                                 filepath_or_buffer = entry['path']
+
+                            context.log.info(f"Reading '{entry['path']}' in data set '{set_id}'")
+
                             # https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.read_csv.html#pandas.read_csv
                             df = pd.read_csv(filepath_or_buffer, dtype=dtypes)
 
-                            df.rename(columns=str.strip, inplace=True)  # remove any whitespace
+                            df.rename(columns=str.strip, inplace=True)  # remove any whitespace in column names
+
+                            df.sort_values(by=['ID'], inplace=True)
+
+                            # filter previously uploaded
+                            if prev_uploaded is not None and len(prev_uploaded) > 0:
+                                duplicated = 0
+                                # https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.itertuples.html#pandas.DataFrame.itertuples
+                                for row in prev_uploaded.itertuples(index=False, name='PrevUpload'):
+                                    pre_len = len(df)
+                                    df.drop(df[(df['ID'] >= row.sj_pk_min) & (df['ID'] <= row.sj_pk_max)].index,
+                                            inplace=True)
+                                    duplicated += (pre_len - len(df))
+
+                                if duplicated > 0:
+                                    context.log.info(f'Removed {duplicated} previously uploaded records')
+
                             sets_df[set_id] = DataSet(entry['name'], entry['path'],
-                                                      start_date=entry['start_date'], end_date=entry['end_date'], df=df)
+                                                      start_date=entry['start_date'], end_date=entry['end_date'], df=df,
+                                                      min_id=df['ID'].min(), max_id=df['ID'].max())
                         else:
                             context.log.warn(f'No type match for {entry["path"]}')
                     except IOError as ioe:
@@ -286,21 +347,27 @@ def merge_promo_csv_file_sets(context, sets_list: List, sets_df: Dict, dtypes_by
             for entry in set_entry[set_id]:  # DataSet in list
                 if regex_item.search(entry['name']):
 
+                    # get dtypes for file
                     dtypes = {}
                     for key in dtypes_by_root.keys():
                         if regex_item.match(key):
                             dtypes = dtypes_by_root[key]
                             break
 
+                    context.log.info(f"Reading '{entry['path']}' in data set '{set_id}'")
+
                     # found matching file, read it as DataFrame
                     # https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.read_csv.html#pandas.read_csv
                     df = pd.read_csv(entry['path'], dtype=dtypes)
+
+                    df.rename(columns=str.strip, inplace=True)  # remove any whitespace in column names
 
                     # SJ has the following header
                     # ID,SOURCE,SALESDATE,RESVCODE,RESVCOMPSEQUENCE,ENTRYTYPE,SEQUENCE,RESVCOMPTYPE,RESVCOMPSUBTYPE,DESCRIPTION,REMOTEREFTYPE,REMOTEREFCODE,DOCUMENTED,FARECONSTRUCTION,PROVIDERCODE, CUSTOMERPROFILE,AGENCY,AGENT,DOCTYPE,TRANSACTIONCURRENCYCODE,TRANSACTIONBASEAMOUNT,TRANSACTIONTOTALTAXAMOUNT,ENTITYCURRENCYCODE,ENTITYBASEAMOUNT,ENTITYTOTALTAXAMOUNT, TRANSACTIONMILESAMOUNTPAID,TRANSACTIONMONEYAMOUNTPAID,CUSTOMERTYPE,MARKET,PAYMENTTYPE,TRAVELERTYPE,ENTITYTOTALPROMOTIONAMOUNT,INTERNALAGENT, FIRSTDATEOFTRAVEL,LASTDATEOFTRAVEL,PROVIDERNAME,FEETYPEDESCRIPTION, FEESUBTYPEDESCRIPTION,NONREFUNDABLE,REFERENCEDCOMPONENTTYPE,TRANSACTIONBASEREDEMPTIONAMT,TRANSACTIONBASEREDEMPTIONEQUIV,INVOICED, LOYALTYNUMBER
                     # SJPromo has the following header
                     # ID,SALESJOURNALID,SEQUENCE,TRANSACTIONPROMOTIONAMOUNT,ENTITYPROMOTIONAMOUNT,PROMOCODE,EXTERNALPROMOCODE,CERTIFICATE
 
+                    # TODO columns to drop should really be defined in config in sales_data_desc.csv
                     # ID is not required
                     df = df.drop(['ID'], axis=1)
 
@@ -320,10 +387,116 @@ def merge_promo_csv_file_sets(context, sets_list: List, sets_df: Dict, dtypes_by
                     merged = merged.drop(['SALESJOURNALID'], axis=1)
                     sets_df[set_id].df = merged
 
+                    context.log.info(f"Merged '{entry['path']}' in data set '{set_id}'")
+
                     count += 1
                     break
 
     context.log.info(f'{count} promo DataFrames merged from {len(sets_list)} data sets')
+
+    yield Output(sets_list, 'sets_list')
+    yield Output(sets_df, 'sets_df')
+
+
+@solid(
+    output_defs=[
+        OutputDefinition(dagster_type=List, name='sets_list', is_optional=False),
+        OutputDefinition(dagster_type=Dict, name='sets_df', is_optional=False),
+    ],
+)
+def merge_segs_csv_file_sets(context, sets_list: List, sets_df: Dict, dtypes_by_root: Dict, regex_patterns: Dict):
+    """
+    Merge the segs file in all import sets
+    :param context: execution context
+    :param sets_list: list of, dictionaries of dictionaries of all the files in an import set;
+                 [ {set_id1: [{'name': filename1_set1, 'path': path including filename1_set1},
+                             {'name': filename2_set1, 'path': path including filename2_set1}, ...]},
+                   {set_id2: [{'name': filename1_set2, 'path': path including filename1_set2},
+                              {'name': filename2_set2, 'path': path including filename2_set2}, ...]}, ... ]
+    :param sets_df: dict of DataSet with set ids as key
+    :param dtypes_by_root: dict of dtypes dicts with root table identifier as the key
+    :param regex_patterns: dict of regex pattern representing filenames and file sets
+    :return: dict of data with set ids as key and DataSet as value
+    """
+    count = 0
+    regex_patterns_dict = regex_patterns['value']
+    regex_item = re.compile(regex_patterns_dict['set_sjseg_pattern'])
+    for set_entry in sets_list:  # dict in list
+        for set_id in set_entry.keys():  # key in dict.keys
+            for entry in set_entry[set_id]:  # DataSet in list
+                if regex_item.search(entry['name']):
+
+                    # get dtypes for file
+                    dtypes = {}
+                    for key in dtypes_by_root.keys():
+                        if regex_item.match(key):
+                            dtypes = dtypes_by_root[key]
+                            break
+
+                    context.log.info(f"Reading '{entry['path']}' in data set '{set_id}'")
+
+                    # found matching file, read it as DataFrame
+                    # https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.read_csv.html#pandas.read_csv
+                    df = pd.read_csv(entry['path'], dtype=dtypes)
+
+                    df.rename(columns=str.strip, inplace=True)  # remove any whitespace in column names
+
+                    # SJ has the following header
+                    # ID,SOURCE,SALESDATE,RESVCODE,RESVCOMPSEQUENCE,ENTRYTYPE,SEQUENCE,RESVCOMPTYPE,RESVCOMPSUBTYPE,DESCRIPTION,REMOTEREFTYPE,REMOTEREFCODE,DOCUMENTED,FARECONSTRUCTION,PROVIDERCODE, CUSTOMERPROFILE,AGENCY,AGENT,DOCTYPE,TRANSACTIONCURRENCYCODE,TRANSACTIONBASEAMOUNT,TRANSACTIONTOTALTAXAMOUNT,ENTITYCURRENCYCODE,ENTITYBASEAMOUNT,ENTITYTOTALTAXAMOUNT, TRANSACTIONMILESAMOUNTPAID,TRANSACTIONMONEYAMOUNTPAID,CUSTOMERTYPE,MARKET,PAYMENTTYPE,TRAVELERTYPE,ENTITYTOTALPROMOTIONAMOUNT,INTERNALAGENT, FIRSTDATEOFTRAVEL,LASTDATEOFTRAVEL,PROVIDERNAME,FEETYPEDESCRIPTION, FEESUBTYPEDESCRIPTION,NONREFUNDABLE,REFERENCEDCOMPONENTTYPE,TRANSACTIONBASEREDEMPTIONAMT,TRANSACTIONBASEREDEMPTIONEQUIV,INVOICED, LOYALTYNUMBER
+                    # SJSeg has the following header
+                    # ID,SALESJOURNALID,ORIGINCODE,DESTINATIONCODE,OPERATINGCARRIER,MARKETINGCARRIER,FAREFAMILY,FLIGHTSEQUENCE,BOOKINGCLASS,FLIGHTNUMBER
+
+                    # combine origin & destination
+                    df['SEG'] = df['ORIGINCODE'] + '-' + df['DESTINATIONCODE']
+
+                    # ID is not required
+                    df = df.drop(['ID', 'ORIGINCODE', 'DESTINATIONCODE'], axis=1)
+
+                    # SALESJOURNALID represents a unique row within a SalesJournal, so will be
+                    # used to match SJ entries but is not required in merged DataFrame
+                    # Other column names do not conflict with existing SJ column names
+
+                    df.sort_values(by=['SALESJOURNALID', 'FLIGHTSEQUENCE'], inplace=True)
+
+                    context.log.debug(f"Start df.groupby segments for data set '{set_id}'")
+
+                    # series of combined segments with salesjournalid as index
+                    segments = df.groupby(['SALESJOURNALID'])['SEG']. \
+                        apply(lambda segs: segs.str.cat(sep=','))
+
+                    context.log.debug(f"Start df.merge segments for data set '{set_id}'")
+
+                    # dataframe with multiple rows for sales with multiple segments
+                    segments = df.merge(segments.to_frame(), left_on=['SALESJOURNALID'], right_index=True,
+                                        how='left', suffixes=('_left', '_right'))
+
+                    segments = segments.drop(['FLIGHTSEQUENCE', 'SEG_left'], axis=1)
+                    segments = segments.rename(columns={'SEG_right': 'SEGMENTS'})
+
+                    segments.drop_duplicates(subset='SALESJOURNALID', keep='first', inplace=True)
+                    segments = segments.reset_index(drop=True)
+
+                    context.log.debug(f"Start df.merge dfs for data set '{set_id}'")
+
+                    # https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.merge.html#pandas.DataFrame.merge
+                    # merge DataFrame using only keys from left frame, similar to a SQL left outer join &
+                    # preserve key order.
+                    merged = sets_df[set_id].df.merge(segments,
+                                                      left_on=['ID'],
+                                                      right_on=['SALESJOURNALID'],
+                                                      how='left', suffixes=('_left', '_right'))
+                    # SALESJOURNALID from the right is included but not needed
+                    # (same as ID from the left), so drop
+                    merged = merged.drop(['SALESJOURNALID'], axis=1)
+
+                    sets_df[set_id].df = merged
+
+                    context.log.info(f"Merged '{entry['path']}' in data set '{set_id}'")
+
+                    count += 1
+                    break
+
+    context.log.info(f'{count} segs DataFrames merged from {len(sets_list)} data sets')
 
     yield Output(sets_list, 'sets_list')
     yield Output(sets_df, 'sets_df')

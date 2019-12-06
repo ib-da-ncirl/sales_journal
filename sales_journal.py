@@ -30,9 +30,10 @@ from db_toolkit.misc import (
 )
 from pipelines import (
     execute_csv_to_postgres_pipeline,
-    execute_postgres_to_plot_pipeline
+    execute_postgres_to_plot_pipeline,
+    execute_create_sales_data_postgres_pipeline,
+    execute_clean_sales_data_postgres_pipeline,
 )
-from pipelines.clean_pipelines import execute_clean_sales_data_postgres_pipeline
 
 """
 """
@@ -75,17 +76,23 @@ if __name__ == '__main__':
         execute_postgres_to_plot_pipeline(app_cfg['sales_journal'], plotly_cfg, postgres_warehouse,
                                           'entitybaseamount_by_salesdate')
 
+    def call_execute_create_sales_data_postgres_pipeline():
+        execute_create_sales_data_postgres_pipeline(app_cfg['sales_journal'], postgres_warehouse)
+
     def call_execute_clean_sales_data_postgres_pipeline():
         execute_clean_sales_data_postgres_pipeline(app_cfg['sales_journal'], postgres_warehouse)
 
 
-    pipeline = app_cfg['sales_journal']['pipeline']
+    pipeline = 'menu'
+    if 'pipeline' in app_cfg['sales_journal']:
+        pipeline = app_cfg['sales_journal']['pipeline'].lower()
     if pipeline == 'menu':
         menu = Menu()
         menu.set_options([
             ("Upload sales data to Postgres", call_execute_csv_to_postgres_pipeline),
             ("Plot entitybaseamount_by_salesdate", call_execute_postgres_to_plot_pipeline),
-            ("Clean sales_data from server", call_execute_clean_sales_data_postgres_pipeline),
+            ("Create sales data tables in Postgres", call_execute_create_sales_data_postgres_pipeline),
+            ("Clean sales data tables in Postgres", call_execute_clean_sales_data_postgres_pipeline),
             ("Exit", Menu.CLOSE)
         ])
         menu.set_title("SalesJournal Data Processing Menu")
@@ -95,6 +102,8 @@ if __name__ == '__main__':
         call_execute_csv_to_postgres_pipeline()
     elif pipeline == 'postgres_to_plot_pipeline':
         call_execute_postgres_to_plot_pipeline()
+    elif pipeline == 'create_sales_data_postgres_pipeline':
+        call_execute_create_sales_data_postgres_pipeline()
     elif pipeline == 'clean_sales_data_postgres_pipeline':
         call_execute_clean_sales_data_postgres_pipeline()
 

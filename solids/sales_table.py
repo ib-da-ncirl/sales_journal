@@ -21,10 +21,9 @@
 import psycopg2
 from dagster import (
     solid,
-    Failure,
     Dict,
     String,
-    lambda_solid, composite_solid, OutputDefinition, Output)
+    OutputDefinition, Output, Field, Bool)
 from dagster_pandas import DataFrame
 from db_toolkit.postgres.postgresdb_sql import count_sql
 from db_toolkit.postgres.postgresdb_sql import estimate_count_sql
@@ -52,6 +51,10 @@ def generate_table_fields_str(context, table_desc: DataFrame):
     idx = 0
     # https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.itertuples.html#pandas.DataFrame.itertuples
     for row in table_desc.itertuples(index=False, name='FieldDef'):
+        if row.save.lower() != 'y':
+            # don't save this entry to database
+            continue
+
         if idx > 0:
             create_columns += ', '
             insert_columns += ', '
@@ -59,12 +62,14 @@ def generate_table_fields_str(context, table_desc: DataFrame):
         create_columns += f'{row.field} {row.datatype} '
         insert_columns += f'{row.field} '
 
-        if row.not_null != '':
+        if row.primary_key.lower() == 'y':
+            create_columns += 'PRIMARY KEY '
+        if row.not_null.lower() == 'y':
             create_columns += 'NOT NULL '
         if row.default != '':
             # integer field default values may be real/str in table_desc
             dtype = row.datatype.lower()
-            if dtype == 'integer' or dtype == 'smallint' or dtype == 'bigint':
+            if dtype == 'integer' or dtype == 'smallint' or dtype == 'bigint' or dtype == 'serial':
                 default = f'{int(row.default)}'
             else:
                 default = f'{row.default}'
@@ -76,7 +81,16 @@ def generate_table_fields_str(context, table_desc: DataFrame):
     yield Output(insert_columns, 'insert_columns')
 
 
-@solid(required_resource_keys={'postgres_warehouse'})
+@solid(required_resource_keys={'postgres_warehouse'},
+       config={
+           'fatal': Field(
+               Bool,
+               default_value=True,
+               is_optional=True,
+               description='Controls whether exceptions cause a Failure or not',
+           )
+       }
+       )
 def upload_sales_table(context, sets_df: Dict, insert_columns: String, table_name: String) -> Dict:
     """
     Upload a DataFrame to the Postgres server, creating the table if it doesn't exist
@@ -84,12 +98,17 @@ def upload_sales_table(context, sets_df: Dict, insert_columns: String, table_nam
     :param sets_df: dict of DataSet with set ids as key
     :param insert_columns: column names for the database table
     :param table_name: name of database table to upload to
+    :return: dict of results with set id as the key
+             { <set_id>: { 'uploaded': True|False,
+                           'value': { 'fileset': <set_id>,
+                                      'sj_pk_min': min value of sales journal primary key,
+                                      'sj_pk_max': max value of sales journal primary key  }}}
     """
 
     results = {}
 
     if len(sets_df.keys()) == 0:
-        context.log.info(f'No records to upload to {table_name}')
+        context.log.info(f"No records to upload to '{table_name}'")
     else:
         client = context.resources.postgres_warehouse.get_connection(context)
 
@@ -105,7 +124,7 @@ def upload_sales_table(context, sets_df: Dict, insert_columns: String, table_nam
                 tuples = [tuple(x) for x in data_set.df.values]
 
                 try:
-                    context.log.info(f'Uploading {len(tuples)} records for {set_id} to {table_name}')
+                    context.log.info(f"Uploading {len(tuples)} records for '{set_id}' to '{table_name}'")
 
                     # psycopg2.extras.execute_values() doesn't return much, so calc existing & post-insert count
                     # estimate using estimate_count_sql
@@ -126,15 +145,20 @@ def upload_sales_table(context, sets_df: Dict, insert_columns: String, table_nam
                     results[set_id] = {
                         'uploaded': True,
                         'value': {
-                            # entries must follow order of tracking_data_columns.names from config ignoring the id columnn
+                            # entries must follow order of tracking_data_columns.names from config
+                            # ignoring the id column
                             'fileset': set_id,
+                            'sj_pk_min': data_set.df['ID'].min(),
+                            'sj_pk_max': data_set.df['ID'].max()
                         }
                     }
 
-                    context.log.info(f'Uploaded {post_len - pre_len} records from {set_id}')
+                    context.log.info(f"Uploaded estimated {post_len - pre_len} records from '{set_id}'")
 
                 except psycopg2.Error as e:
-                    context.log.warn(f'Error: {e}')
+                    context.log.error(f'Error: {e}')
+                    if context.solid_config['fatal']:
+                        raise e
 
                 finally:
                     # tidy up

@@ -39,11 +39,16 @@ from solids import (
     transform_table_desc_df,
     load_list_of_csv_files,
     create_csv_file_sets,
+    filter_load_file_sets,
     read_sj_csv_file_sets,
     merge_promo_csv_file_sets,
+    merge_segs_csv_file_sets,
     generate_tracking_table_fields_str,
     upload_tracking_table,
-    generate_dtypes)
+    transform_loaded_records,
+    generate_dtypes
+)
+import pprint
 
 
 @pipeline(
@@ -71,11 +76,10 @@ def csv_to_postgres_pipeline():
     create_data_columns, insert_data_columns = generate_table_fields_str(table_desc)
     create_tracking_columns, insert_tracking_columns = generate_tracking_table_fields_str()
 
-    # create sales_data and tracking_data tables
-    create_tables(create_data_columns, create_tracking_columns)
-
     # get previously uploaded file sets info
-    prev_uploaded = query_table()
+    prev_uploaded = transform_loaded_records(
+        query_table()
+    )
 
     # load the csv files in to sets, so that the csv files that relate to a common export are all together and load them
     sets = create_csv_file_sets(
@@ -83,10 +87,15 @@ def csv_to_postgres_pipeline():
     )
 
     # read the sales journal
-    sets_list, sets_df = read_sj_csv_file_sets(sets, dtypes_by_root)
+    sets_list, sets_df = read_sj_csv_file_sets(
+        filter_load_file_sets(sets), dtypes_by_root, prev_uploaded
+    )
 
     # merge the promo info into the sales journal
     sets_list, sets_df = merge_promo_csv_file_sets(sets_list, sets_df, dtypes_by_root)
+
+    # merge the segs info into the sales journal
+    sets_list, sets_df = merge_segs_csv_file_sets(sets_list, sets_df, dtypes_by_root)
 
     sets_df = transform_sets_df(sets_df, table_desc, table_desc_by_type)
 
@@ -102,10 +111,12 @@ def execute_csv_to_postgres_pipeline(sj_config: dict, postgres_warehouse: dict):
     :param postgres_warehouse: postgres server resource
     """
 
-    # .add_solid_input('does_psql_table_exist', 'name', sj_config['tracking_table_query']) \
-
     # environment dictionary
     regex_patterns = sj_config['regex_patterns']
+    load_file_sets = None
+    if 'load_file_sets' in sj_config:
+        load_file_sets = sj_config['load_file_sets']
+
     env_dict = EnvironmentDict() \
         .add_solid_input('load_csv', 'csv_path', sj_config['sales_data_desc']) \
         .add_solid_input('load_csv', 'kwargs', {}, is_kwargs=True) \
@@ -113,24 +124,24 @@ def execute_csv_to_postgres_pipeline(sj_config: dict, postgres_warehouse: dict):
         .add_solid('generate_table_fields_str') \
         .add_solid_input('generate_tracking_table_fields_str',
                          'tracking_data_columns', sj_config['tracking_data_columns']) \
-        .add_composite_solid_input('create_tables', 'create_data_table', 'table_name',
-                                   sj_config['sales_data_table']) \
-        .add_composite_solid_input('create_tables', 'create_tracking_table', 'table_name',
-                                   sj_config['tracking_data_table']) \
+        .add_solid_input('transform_loaded_records', 'tracking_data_columns', sj_config['tracking_data_columns']) \
         .add_solid_input('query_table', 'sql', sj_config['tracking_table_query']) \
         .add_solid_input('load_list_of_csv_files', 'db_data_path', sj_config['db_data_path']) \
         .add_solid_input('load_list_of_csv_files', 'date_in_name_pattern', sj_config['date_in_name_pattern']) \
         .add_solid_input('load_list_of_csv_files', 'date_in_name_format', sj_config['date_in_name_format']) \
         .add_solid_input('create_csv_file_sets', 'regex_patterns', regex_patterns) \
+        .add_solid_input('filter_load_file_sets', 'load_file_sets', load_file_sets) \
         .add_solid_input('read_sj_csv_file_sets', 'regex_patterns', regex_patterns) \
         .add_solid_input('merge_promo_csv_file_sets', 'regex_patterns', regex_patterns) \
+        .add_solid_input('merge_segs_csv_file_sets', 'regex_patterns', regex_patterns) \
         .add_solid('transform_sets_df') \
         .add_solid_input('upload_sales_table', 'table_name', sj_config['sales_data_table']) \
         .add_solid_input('upload_tracking_table', 'table_name', sj_config['tracking_data_table']) \
         .add_resource('postgres_warehouse', postgres_warehouse) \
         .build()
 
-    print(env_dict)
+    pp = pprint.PrettyPrinter(indent=2)
+    pp.pprint(env_dict)
 
     result = execute_pipeline(csv_to_postgres_pipeline, environment_dict=env_dict)
     assert result.success
