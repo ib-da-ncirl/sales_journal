@@ -28,8 +28,8 @@ from dagster import (
     List,
     Dict,
     OutputDefinition,
-    Output
-)
+    Output,
+    Any)
 import plotly
 import plotly.express as px
 
@@ -56,7 +56,7 @@ def transform_plot_data(context, df: DataFrame, plot_config: Dict) -> DataFrame:
 
 
 @solid
-def process_plot(context, df, plot_config, plotly_cfg):
+def process_plot(context, df: DataFrame, plot_config: Dict, plotly_cfg: String):
     """
     Perform the plot
     :param context: execution context
@@ -78,8 +78,28 @@ def process_plot(context, df, plot_config, plotly_cfg):
     if plotly_cfg is not None:
         plotly.io.orca.config.executable = plotly_cfg
 
+    plot_type = plot_config['type'].lower()
+    if plot_type == 'line':
+        fig = process_line_plot(grouped_df, plot_config)
+
+    output_to = plot_config['output_to'].lower()
+    if output_to == 'file':
+        fig.write_image(plot_config['output_path'])
+    elif output_to == 'show':
+        fig.show()
+    else:
+        context.log.info(f"Unknown output destination ({output_to}) for '{plot_config['title']}'")
+
+
+def process_line_plot(grouped_df: DataFrame, plot_config: Dict) -> Any:
+    """
+    Perform a line plot
+    :param grouped_df: pandas DataFrame of plot data
+    :param plot_config: dict of plot configurations
+    """
+
     # https://plot.ly/python-api-reference/generated/plotly.express.line.html
     fig = px.line(data_frame=grouped_df, x=plot_config['x'], y=plot_config['y'], title=plot_config['title'],
                   labels=plot_config['labels'])
-    # fig.show()
-    fig.write_image(plot_config['output_path'])
+
+    return fig

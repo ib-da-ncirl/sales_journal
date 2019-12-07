@@ -19,7 +19,13 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from dagster import execute_pipeline, pipeline, ModeDefinition
+from dagster import (
+    execute_pipeline,
+    pipeline,
+    ModeDefinition,
+    Dict,
+    String,
+)
 from dagster_toolkit.postgres import (
     postgres_warehouse_resource,
     query_table,
@@ -59,7 +65,7 @@ def postgres_to_plot_pipeline():
     )
 
 
-def execute_postgres_to_plot_pipeline(sj_config: dict, plotly_cfg: str, postgres_warehouse: dict, plot_name: str):
+def execute_postgres_to_plot_pipeline(sj_config: Dict, plotly_cfg: String, postgres_warehouse: Dict, plot_name: String):
     """
     Execute the pipeline to create a plot
     :param sj_config: app configuration
@@ -67,9 +73,23 @@ def execute_postgres_to_plot_pipeline(sj_config: dict, plotly_cfg: str, postgres
     :param postgres_warehouse: postgres server resource
     :param plot_name: name of plot to produce
     """
+    execute_file_ip_postgres_to_plot_pipeline(sj_config, plotly_cfg, postgres_warehouse,
+                                              sj_config['plots_cfg'], plot_name)
+
+
+def execute_file_ip_postgres_to_plot_pipeline(sj_config: Dict, plotly_cfg: String, postgres_warehouse: Dict,
+                                              plot_cfg_path: String, plot_name: String):
+    """
+    Execute the pipeline to create a plot
+    :param sj_config: app configuration
+    :param plotly_cfg: plotly configuration
+    :param postgres_warehouse: postgres server resource
+    :param plot_cfg_path: path to plot configuration file
+    :param plot_name: name of plot to produce
+    """
     # environment dictionary
     env_dict = EnvironmentDict() \
-        .add_solid_input('initialise_plot', 'yaml_path', sj_config['plots_cfg']) \
+        .add_solid_input('initialise_plot', 'yaml_path', plot_cfg_path) \
         .add_solid_input('initialise_plot', 'plot_name', plot_name) \
         .add_solid('query_table') \
         .add_solid_input('process_plot', 'plotly_cfg', plotly_cfg) \

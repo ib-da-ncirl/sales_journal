@@ -62,17 +62,17 @@ def get_table_desc_type_limits(table_desc: DataFrame) -> Dict:
     type_values = {
         'date': {'min_val': date.min, 'max_val': date.max, 'max_size': sys.getsizeof(date.min)},
         'timestamp': {'min_val': datetime.min, 'max_val': datetime.max, 'max_size': sys.getsizeof(datetime.min)},
-        'smallint': {'min_val': -0x8000, 'max_val': 0X7fff, 'max_size': 2},
-        'smallserial': {'min_val': -0x8000, 'max_val': 0X7fff, 'max_size': 2},
-        'int': {'min_val': -0x80000000, 'max_val': 0X7fffffff, 'max_size': 4},
-        'serial': {'min_val': -0x80000000, 'max_val': 0X7fffffff, 'max_size': 4},
-        'bigint': {'min_val': -0x8000000000000000, 'max_val': 0X7fffffffffffffff, 'max_size': 8},
-        'bigserial': {'min_val': -0x8000000000000000, 'max_val': 0X7fffffffffffffff, 'max_size': 8},
+        'smallint': {'min_val': -2**15, 'max_val': 2**15-1, 'max_size': 2},
+        'smallserial': {'min_val': -2**15, 'max_val': 2**15-1, 'max_size': 2},
+        'int': {'min_val': -2**31, 'max_val': 2**31-1, 'max_size': 2},
+        'serial': {'min_val': -2**31, 'max_val': 2**31-1, 'max_size': 2},
+        'bigint': {'min_val': -2**63, 'max_val': 2**63-1, 'max_size': 8},
+        'bigserial': {'min_val': -2**63, 'max_val': 2**63-1, 'max_size': 8},
         'real': {'min_val': math.exp(-37), 'max_val': math.exp(37), 'max_size': 4},
         'double precision': {'min_val': math.exp(-307), 'max_val': math.exp(308), 'max_size': 8},
         'text': {'min_val': 0, 'max_val': 0, 'max_size': 0},
     }
-    regex = re.compile(r'.*\((\d)+\)')
+    regex = re.compile(r'.*\((\d+)\)')
     type_limits = {}
     for idx in range(len(table_desc)):
         row = table_desc.iloc[idx]
@@ -103,6 +103,9 @@ def transform_sets_df(context, sets_df: Dict, table_desc: DataFrame, table_desc_
     :rtype: dict
     """
     for set_id in sets_df.keys():
+
+        context.log.info(f"Transform data set {set_id}'")
+
         set_df = sets_df[set_id].df
 
         # generate a list of the names of fields with the date types

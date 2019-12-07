@@ -19,17 +19,13 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from .csv_pipelines import execute_csv_to_postgres_pipeline
-from .plot_pipelines import execute_postgres_to_plot_pipeline, execute_file_ip_postgres_to_plot_pipeline
-from .create_pipelines import execute_create_sales_data_postgres_pipeline
-from .clean_pipelines import execute_clean_sales_data_postgres_pipeline
+from dagster import as_dagster_type
+from bitarray import bitarray
 
-# if somebody does "from sales_journal.pipelines import *", this is what they will
-# be able to access:
-__all__ = [
-    'execute_csv_to_postgres_pipeline',
-    'execute_postgres_to_plot_pipeline',
-    'execute_file_ip_postgres_to_plot_pipeline',
-    'execute_create_sales_data_postgres_pipeline',
-    'execute_clean_sales_data_postgres_pipeline',
-]
+
+BitArray = as_dagster_type(
+    bitarray,
+    name='BitArray',
+    description='''bitarray: efficient arrays of booleans.
+    See https://pypi.org/project/bitarray/, https://github.com/ilanschnell/bitarray''',
+)

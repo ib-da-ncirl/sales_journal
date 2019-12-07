@@ -26,6 +26,8 @@ from dagster import (
     String,
     OutputDefinition, Output, Optional, Field, Bool)
 from dagster_pandas import DataFrame
+from bitarray import bitarray
+from misc_sj import BitArray
 
 
 @solid(
@@ -129,9 +131,41 @@ def upload_tracking_table(context, results: Dict, insert_columns: String, table_
                 client.close_connection()
 
 
-@solid()
-def transform_loaded_records(context, prev_uploaded: Optional[DataFrame], tracking_data_columns: Dict) -> Optional[DataFrame]:
+@solid(
+    output_defs=[
+        OutputDefinition(dagster_type=Optional[DataFrame], name='prev_uploaded', is_optional=False),
+        OutputDefinition(dagster_type=Dict, name='uploaded_ids', is_optional=False),
+    ],
+)
+def transform_loaded_records(context, prev_uploaded: Optional[DataFrame], uploaded_ids_df: Optional[DataFrame],
+                             tracking_data_columns: Dict, sj_pk_range: Dict):
+    """
+    Transform information regarding previously uploaded data
+    :param context: execution context
+    :param prev_uploaded: details of previously loaded data sets
+    :param uploaded_ids_df: sales_data primary keys
+    :param tracking_data_columns: details of tracking data table
+    :param sj_pk_range: range of possible primary key values that will be encountered
+    """
     if prev_uploaded is not None and len(prev_uploaded) > 0:
         names = tracking_data_columns['value']['names']
         prev_uploaded.columns = names
-    return prev_uploaded
+
+    min_sj_pk_value = sj_pk_range['value']['min_sj_pk_value']
+    max_sj_pk_value = sj_pk_range['value']['max_sj_pk_value']
+    ba = bitarray(max_sj_pk_value - min_sj_pk_value + 1)
+    ba.setall(False)
+    uploaded_ids = {
+        'min_sj_pk_value': min_sj_pk_value,
+        'max_sj_pk_value': max_sj_pk_value,
+        'ids': ba
+    }
+    if uploaded_ids_df is not None and len(uploaded_ids_df) > 0:
+        def set_ba(id_to_set):
+            nonlocal ba
+            ba[id_to_set - min_sj_pk_value] = True
+            return id_to_set
+        uploaded_ids_df[0].apply(set_ba)
+
+    yield Output(prev_uploaded, 'prev_uploaded')
+    yield Output(uploaded_ids, 'uploaded_ids')

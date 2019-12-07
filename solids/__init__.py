@@ -28,6 +28,7 @@ from .drop_table import (
 from .sales_table import (
     generate_table_fields_str,
     upload_sales_table,
+    query_sales_data,
 )
 from .process_node import (
     get_table_desc_by_type,
@@ -60,6 +61,7 @@ __all__ = [
 
     'generate_table_fields_str',
     'upload_sales_table',
+    'query_sales_data',
 
     'get_table_desc_by_type',
     'get_table_desc_type_limits',

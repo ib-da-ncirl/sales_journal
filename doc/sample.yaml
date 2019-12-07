@@ -38,6 +38,19 @@ sales_journal:
   load_file_sets:
 #    - 01-04-2019-to-01-05-2019
 
+  # specifies the max number of file sets that may be processed in a single run
+  max_file_sets_per_run: 2
+
+  # specifies the run mode; 'normal'- execute csv pipeline once, or 'loop'- execute csv pipeline until all file sets in 'db_data_path' are processed
+  csv_pipeline_run_mode: normal
+
+  # range of possible primary key values that will be encountered in sales journal
+  sj_pk_range:
+    # minimum primary key value that will be encountered
+    min_sj_pk_value: 11000000
+    # maximum primary key value that will be encountered
+    max_sj_pk_value: 22000000
+
   # csv file containing info regarding sales_journal table
   sales_data_desc: cfg/sales_data_desc.csv
 
@@ -67,6 +80,8 @@ sales_journal:
       - false
   # query to get previously uploaded files
   tracking_table_query: SELECT * FROM tracking_data;
+  # query to get previously uploaded files
+  sales_id_query: SELECT id FROM sales_data;
 
   regex_patterns:
     # regex to match csv and gz csv filename of the form; ??_DD-MM-YYYY-to-DD-MM-YYYY.csv or ??_DD-MM-YYYY-to-DD-MM-YYYY.csv.gz

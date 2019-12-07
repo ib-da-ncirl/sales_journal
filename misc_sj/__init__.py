@@ -20,9 +20,11 @@
 # SOFTWARE.
 
 from .DataSet import DataSet
+from .sj_types import BitArray
 
 # if somebody does "from sales_journal.pipelines import *", this is what they will
 # be able to access:
 __all__ = [
     'DataSet',
+    'BitArray',
 ]

@@ -73,8 +73,8 @@ ignore,root,field,source,save,loadtype,datatype,primary_key,not_null,default,for
 ,SJSeg_,SALESJOURNALID,M,,,BIGINT,,,,,ID corresponding to RsalesJournal record. Foreign key.
 ,SJSeg_,ORIGINCODE,O,,,VARCHAR(3),,,,,Origin airport code
 ,SJSeg_,DESTINATIONCODE,O,,,VARCHAR(3),,,,,Destination airport code
-,SJSeg_,OPERATINGCARRIER,O,y,,VARCHAR(6),,,,,Operating carrier
-,SJSeg_,MARKETINGCARRIER,O,y,,VARCHAR(6),,,,,Marketing carrier
+,SJSeg_,OPERATINGCARRIER,O,y,,VARCHAR(20),,,,,Operating carrier
+,SJSeg_,MARKETINGCARRIER,O,y,,VARCHAR(20),,,,,Marketing carrier
 ,SJSeg_,FAREFAMILY,O,y,,TEXT,,,,,Fare family
 ,SJSeg_,FLIGHTSEQUENCE,M,,,SMALLINT,,,,,"Flight sequence number. (SalesJournalID, FlightSequence) is the Unique key for the table."
 ,SJSeg_,BOOKINGCLASS,O,y,,TEXT,,,,,Booking Class

@@ -26,6 +26,7 @@ import os.path as path
 from os import listdir
 from os.path import isfile, join
 from datetime import datetime
+from bitarray import bitarray
 
 from gzip import GzipFile
 
@@ -38,6 +39,7 @@ from dagster import (
     String,
     List,
     Dict,
+    Int,
     OutputDefinition,
     Output,
     lambda_solid,
@@ -208,7 +210,7 @@ def generate_dtypes(table_desc: DataFrame, table_desc_by_type: Dict) -> Dict:
 
 
 @solid()
-def filter_load_file_sets(context, sets_list: List, load_file_sets: Dict) -> List:
+def filter_load_file_sets(context, sets_list: List, load_file_sets: Dict, max_file_sets_per_run: Int) -> List:
     """
     Filter to detected data sets list to remove data sets not specified in load requirements
     :param context: execution context
@@ -218,20 +220,44 @@ def filter_load_file_sets(context, sets_list: List, load_file_sets: Dict) -> Lis
                    {set_id2: [{'name': filename1_set2, 'path': path including filename1_set2, ...},
                               {'name': filename2_set2, 'path': path including filename2_set2, ...}, ...]}, ... ]
     :param load_file_sets: list of data sets to load, others will be ignored
+    :param max_file_sets_per_run: max number of file sets to process at the same time
     :return: filtered sets list
     """
     load_file_sets_list = load_file_sets['value']
+    filtered = []
+    selected_sets = 0
+
+    def add_set(set_to_add) -> bool:
+        nonlocal filtered
+        filtered.append(set_to_add)
+        nonlocal selected_sets
+        selected_sets += 1
+        full = selected_sets >= max_file_sets_per_run
+        if full:
+            context.log.info(f"Maximum sets per run threshold ({max_file_sets_per_run}) reached")
+        return full
+
     if load_file_sets_list is not None:
-        filtered = []
+        if len(load_file_sets_list) > max_file_sets_per_run:
+            raise ValueError(f'Length of load file sets list ({len(load_file_sets_list)}) exceeds '
+                             f'max file sets per run ({max_file_sets_per_run})')
+
+        is_full = False
         for set_entry in sets_list:  # dict in list
             for set_id in set_entry.keys():  # key in dict.keys (there's only one)
                 if set_id not in load_file_sets_list:
                     context.log.info(f"Ignoring data set '{set_id}' as not in load data set list")
-                    continue
                 else:
-                    filtered.append(set_entry)
+                    is_full = add_set(set_entry)
+                    if is_full:
+                        break
+            if is_full:
+                break
     else:
-        filtered = sets_list
+        for set_entry in sets_list:  # dict in list
+            if add_set(set_entry):
+                break
+
     return filtered
 
 
@@ -242,7 +268,7 @@ def filter_load_file_sets(context, sets_list: List, load_file_sets: Dict) -> Lis
     ],
 )
 def read_sj_csv_file_sets(context, sets_list: List, dtypes_by_root: Dict, prev_uploaded: Optional[DataFrame],
-                          regex_patterns: Dict):
+                          uploaded_ids: Dict, regex_patterns: Dict):
     """
     Read the sales journal file in all import sets
     :param context: execution context
@@ -260,7 +286,15 @@ def read_sj_csv_file_sets(context, sets_list: List, dtypes_by_root: Dict, prev_u
     regex_item = re.compile(regex_patterns_dict['set_sj_pattern'])
     regex_csv_set = re.compile(regex_patterns_dict['set_pattern'])
     regex_gz_set = re.compile(regex_patterns_dict['gz_set_pattern'])
+
     sets_df = {}
+    min_sj_pk_value = uploaded_ids['min_sj_pk_value']
+    max_sj_pk_value = uploaded_ids['max_sj_pk_value']
+    ids = uploaded_ids['ids']
+
+    def set_ba(id_to_set):
+        ids[id_to_set - min_sj_pk_value] = True
+        return id_to_set
 
     for set_entry in sets_list:  # dict in list
         for set_id in set_entry.keys():  # key in dict.keys (there's only one)
@@ -296,12 +330,24 @@ def read_sj_csv_file_sets(context, sets_list: List, dtypes_by_root: Dict, prev_u
                             # filter previously uploaded
                             if prev_uploaded is not None and len(prev_uploaded) > 0:
                                 duplicated = 0
-                                # https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.itertuples.html#pandas.DataFrame.itertuples
-                                for row in prev_uploaded.itertuples(index=False, name='PrevUpload'):
+                                if len(df) > 0:
+
+                                    min_id = df['ID'].min()
+                                    if min_id < min_sj_pk_value:
+                                        raise ValueError(f'Minimum id value {min_id} out of range')
+                                    max_id = df['ID'].max()
+                                    if max_id > max_sj_pk_value:
+                                        raise ValueError(f'Maximum id value {max_id} out of range')
+
                                     pre_len = len(df)
-                                    df.drop(df[(df['ID'] >= row.sj_pk_min) & (df['ID'] <= row.sj_pk_max)].index,
-                                            inplace=True)
+                                    # get series of true/false for intersection of previously uploaded and df being
+                                    prev_matches = df['ID'].apply(lambda id_to_chk: ids[id_to_chk - min_sj_pk_value])
+
+                                    df.drop(prev_matches[prev_matches].index, inplace=True)
                                     duplicated += (pre_len - len(df))
+
+                                    # add new ids to uploaded check
+                                    df['ID'].apply(set_ba)
 
                                 if duplicated > 0:
                                     context.log.info(f'Removed {duplicated} previously uploaded records')

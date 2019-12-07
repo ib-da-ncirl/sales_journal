@@ -46,7 +46,8 @@ from solids import (
     generate_tracking_table_fields_str,
     upload_tracking_table,
     transform_loaded_records,
-    generate_dtypes
+    generate_dtypes,
+    query_sales_data,
 )
 import pprint
 
@@ -79,8 +80,9 @@ def csv_to_postgres_pipeline():
     create_tracking_columns, insert_tracking_columns = generate_tracking_table_fields_str()
 
     # get previously uploaded file sets info
-    prev_uploaded = transform_loaded_records(
-        query_table()
+    prev_uploaded, uploaded_ids = transform_loaded_records(
+        query_table(),
+        query_sales_data()
     )
 
     # load the csv files in to sets, so that the csv files that relate to a common export are all together and load them
@@ -90,7 +92,7 @@ def csv_to_postgres_pipeline():
 
     # read the sales journal
     sets_list, sets_df = read_sj_csv_file_sets(
-        filter_load_file_sets(sets), dtypes_by_root, prev_uploaded
+        filter_load_file_sets(sets), dtypes_by_root, prev_uploaded, uploaded_ids
     )
 
     # merge the promo info into the sales journal
@@ -127,12 +129,15 @@ def execute_csv_to_postgres_pipeline(sj_config: dict, postgres_warehouse: dict):
         .add_solid_input('generate_tracking_table_fields_str',
                          'tracking_data_columns', sj_config['tracking_data_columns']) \
         .add_solid_input('transform_loaded_records', 'tracking_data_columns', sj_config['tracking_data_columns']) \
+        .add_solid_input('transform_loaded_records', 'sj_pk_range', sj_config['sj_pk_range']) \
         .add_solid_input('query_table', 'sql', sj_config['tracking_table_query']) \
+        .add_solid_input('query_sales_data', 'sql', sj_config['sales_id_query']) \
         .add_solid_input('load_list_of_csv_files', 'db_data_path', sj_config['db_data_path']) \
         .add_solid_input('load_list_of_csv_files', 'date_in_name_pattern', sj_config['date_in_name_pattern']) \
         .add_solid_input('load_list_of_csv_files', 'date_in_name_format', sj_config['date_in_name_format']) \
         .add_solid_input('create_csv_file_sets', 'regex_patterns', regex_patterns) \
         .add_solid_input('filter_load_file_sets', 'load_file_sets', load_file_sets) \
+        .add_solid_input('filter_load_file_sets', 'max_file_sets_per_run', sj_config['max_file_sets_per_run']) \
         .add_solid_input('read_sj_csv_file_sets', 'regex_patterns', regex_patterns) \
         .add_solid_input('merge_promo_csv_file_sets', 'regex_patterns', regex_patterns) \
         .add_solid_input('merge_segs_csv_file_sets', 'regex_patterns', regex_patterns) \
@@ -145,6 +150,21 @@ def execute_csv_to_postgres_pipeline(sj_config: dict, postgres_warehouse: dict):
     pp = pprint.PrettyPrinter(indent=2)
     pp.pprint(env_dict)
 
-    result = execute_pipeline(csv_to_postgres_pipeline, environment_dict=env_dict)
-    assert result.success
+    run_mode = 'normal'
+    if 'csv_pipeline_run_mode' in sj_config.keys():
+        run_mode = sj_config['csv_pipeline_run_mode'].lower()
+    if run_mode:
+        loop = True
+        while loop:
+            result = execute_pipeline(csv_to_postgres_pipeline, environment_dict=env_dict)
+            assert result.success
+
+            upload_results = result.result_for_solid('upload_sales_table').output_value()
+            loop = len(upload_results.keys()) > 0
+            result = None
+
+    else:
+        # normal mode
+        result = execute_pipeline(csv_to_postgres_pipeline, environment_dict=env_dict)
+        assert result.success
 

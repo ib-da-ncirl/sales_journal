@@ -23,10 +23,15 @@ from dagster import (
     solid,
     Dict,
     String,
-    OutputDefinition, Output, Field, Bool)
+    OutputDefinition, Output, Field, Bool, composite_solid, Optional)
 from dagster_pandas import DataFrame
-from db_toolkit.postgres.postgresdb_sql import count_sql
-from db_toolkit.postgres.postgresdb_sql import estimate_count_sql
+from dagster_toolkit.postgres import (
+    query_table,
+)
+from db_toolkit.postgres import (
+    count_sql,
+    estimate_count_sql,
+)
 from psycopg2.extras import execute_values
 
 
@@ -116,53 +121,76 @@ def upload_sales_table(context, sets_df: Dict, insert_columns: String, table_nam
 
             insert_query = f'INSERT INTO {table_name} ({insert_columns}) VALUES %s;'
 
-            cursor = client.cursor()
-
             # insert data sql
             for set_id in sets_df.keys():
                 data_set = sets_df[set_id]
                 tuples = [tuple(x) for x in data_set.df.values]
 
-                try:
-                    context.log.info(f"Uploading {len(tuples)} records for '{set_id}' to '{table_name}'")
+                if len(tuples) > 0:
+                    cursor = client.cursor()
+                    try:
+                        context.log.info(f"Uploading {len(tuples)} records for '{set_id}' to '{table_name}'")
 
-                    # psycopg2.extras.execute_values() doesn't return much, so calc existing & post-insert count
-                    # estimate using estimate_count_sql
+                        # psycopg2.extras.execute_values() doesn't return much, so calc existing & post-insert count
+                        # estimate using estimate_count_sql
 
-                    # TODO better method of count estimation, estimate_count_sql doesn't work here
+                        # TODO better method of count estimation, estimate_count_sql doesn't work here
 
-                    cursor.execute(estimate_count_sql(table_name))
-                    result = cursor.fetchone()
-                    pre_len = result[0]
+                        cursor.execute(estimate_count_sql(table_name))
+                        result = cursor.fetchone()
+                        pre_len = result[0]
 
-                    execute_values(cursor, insert_query, tuples)
-                    client.commit()
+                        execute_values(cursor, insert_query, tuples)
+                        client.commit()
 
-                    cursor.execute(estimate_count_sql(table_name))
-                    result = cursor.fetchone()
-                    post_len = result[0]
+                        cursor.execute(estimate_count_sql(table_name))
+                        result = cursor.fetchone()
+                        post_len = result[0]
 
+                        results[set_id] = {
+                            'uploaded': True,
+                            'value': {
+                                # entries must follow order of tracking_data_columns.names from config
+                                # ignoring the id column
+                                'fileset': set_id,
+                                'sj_pk_min': data_set.df['ID'].min(),
+                                'sj_pk_max': data_set.df['ID'].max()
+                            }
+                        }
+
+                        context.log.info(f"Uploaded estimated {post_len - pre_len} records from '{set_id}'")
+
+                    except psycopg2.Error as e:
+                        context.log.error(f'Error: {e}')
+                        if context.solid_config['fatal']:
+                            raise e
+
+                    finally:
+                        # tidy up
+                        cursor.close()
+                else:
+                    context.log.info(f"No records to upload for '{set_id}' to '{table_name}'")
                     results[set_id] = {
-                        'uploaded': True,
+                        'uploaded': True,   # so its saved to tracking table and won't get continually loaded
                         'value': {
                             # entries must follow order of tracking_data_columns.names from config
                             # ignoring the id column
                             'fileset': set_id,
-                            'sj_pk_min': data_set.df['ID'].min(),
-                            'sj_pk_max': data_set.df['ID'].max()
+                            'sj_pk_min': 0,
+                            'sj_pk_max': 0
                         }
                     }
 
-                    context.log.info(f"Uploaded estimated {post_len - pre_len} records from '{set_id}'")
-
-                except psycopg2.Error as e:
-                    context.log.error(f'Error: {e}')
-                    if context.solid_config['fatal']:
-                        raise e
-
-                finally:
-                    # tidy up
-                    cursor.close()
-                    client.close_connection()
+            client.close_connection()
 
     return results
+
+
+@composite_solid()
+def query_sales_data(sql: String) -> Optional[DataFrame]:
+    """
+    Query postgres sales_data table
+    """
+    query_data_table = query_table.alias('query_data_table')
+
+    return query_data_table(sql)
