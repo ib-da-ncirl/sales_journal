@@ -36,7 +36,8 @@ from dagster_toolkit.environ import (
 from plot import (
     initialise_plot,
     transform_plot_data,
-    process_plot
+    process_plot,
+    process_sql_plot
 )
 import pprint
 
@@ -51,11 +52,73 @@ import pprint
         )
     ]
 )
-def postgres_to_plot_pipeline():
+def sql_to_plot_pipeline():
     """
     Definition of the pipeline to plot
     """
+
+
+    # plot_config = initialise_plot()
     plot_config, plot_sql = initialise_plot()
+
+    process_sql_plot(plot_config)
+
+
+def execute_sql_to_plot_pipeline(sj_config: Dict, plotly_cfg: String, postgres_warehouse: Dict, plot_name: String):
+    """
+    Execute the pipeline to create a plot
+    :param sj_config: app configuration
+    :param plotly_cfg: plotly configuration
+    :param postgres_warehouse: postgres server resource
+    :param plot_name: name of plot to produce
+    """
+    execute_file_ip_sql_to_plot_pipeline(sj_config, plotly_cfg, postgres_warehouse,
+                                              sj_config['plots_cfg'], plot_name)
+
+
+def execute_file_ip_sql_to_plot_pipeline(sj_config: Dict, plotly_cfg: String, postgres_warehouse: Dict,
+                                              plot_cfg_path: String, plot_name: String):
+    """
+    Execute the pipeline to create a plot
+    :param sj_config: app configuration
+    :param plotly_cfg: plotly configuration
+    :param postgres_warehouse: postgres server resource
+    :param plot_cfg_path: path to plot configuration file
+    :param plot_name: name of plot to produce
+    """
+    # environment dictionary
+    env_dict = EnvironmentDict() \
+        .add_solid_input('initialise_plot', 'yaml_path', plot_cfg_path) \
+        .add_solid_input('initialise_plot', 'plot_name', plot_name) \
+        .add_solid_input('process_sql_plot', 'plotly_cfg', plotly_cfg) \
+        .add_resource('postgres_warehouse', postgres_warehouse) \
+        .build()
+
+    pp = pprint.PrettyPrinter(indent=2)
+    pp.pprint(env_dict)
+
+    result = execute_pipeline(sql_to_plot_pipeline, environment_dict=env_dict)
+    assert result.success
+
+
+@pipeline(
+    mode_defs=[
+        ModeDefinition(
+            # attach resources to pipeline
+            resource_defs={
+                'postgres_warehouse': postgres_warehouse_resource,
+            }
+        )
+    ]
+)
+def dataframe_to_plot_pipeline():
+    """
+    Definition of the pipeline to plot
+    """
+
+    # plot_config = initialise_plot()
+    plot_config, plot_sql = initialise_plot()
+
     process_plot(
         transform_plot_data(
             query_table(plot_sql),
@@ -99,6 +162,6 @@ def execute_file_ip_postgres_to_plot_pipeline(sj_config: Dict, plotly_cfg: Strin
     pp = pprint.PrettyPrinter(indent=2)
     pp.pprint(env_dict)
 
-    result = execute_pipeline(postgres_to_plot_pipeline, environment_dict=env_dict)
+    result = execute_pipeline(dataframe_to_plot_pipeline, environment_dict=env_dict)
     assert result.success
 

@@ -39,3 +39,14 @@ def drop_tables():
         raise Failure('Sales table not dropped')
     if not drop_tracking_table():
         raise Failure('Tracking table not dropped')
+
+
+@composite_solid()
+def drop_currency_tables():
+    """
+    Drop postgres tables
+    """
+    drop_currency_table = drop_table.alias('drop_currency_table')
+
+    if not drop_currency_table():
+        raise Failure('Currency table not dropped')

@@ -25,20 +25,25 @@ from db_toolkit.misc import (
     test_file_path,
     load_yaml
 )
+from dagster_toolkit.postgres import (
+    query_table,
+)
 
 from dagster import (
     solid,
     String,
     Dict,
     OutputDefinition,
-    Output
+    Output,
+    List,
+    composite_solid,
 )
 
 
 @solid(
     output_defs=[
         OutputDefinition(dagster_type=Dict, name='plot_config', is_optional=False),
-        OutputDefinition(dagster_type=String, name='plot_sql', is_optional=False),
+        OutputDefinition(dagster_type=String, name='plot_sql', is_optional=True),
     ],
 )
 def initialise_plot(context, yaml_path, plot_name):
@@ -59,12 +64,19 @@ def initialise_plot(context, yaml_path, plot_name):
     plots_config = load_yaml(yaml_path)
 
     plot_config = None
-    if plot_name in plots_config.keys():
-        plot_config = plots_config[plot_name]
+    if plot_name.lower() == 'all':
+        plot_config = {'all': plots_config}
+        context.log.info(f'Loaded configuration for {len(plots_config.keys())} plots from {yaml_path}')
+        raise NotImplementedError('All plots functionality is not yet fully supported')
+    elif plot_name in plots_config.keys():
+        plot_config = {plot_name: plots_config[plot_name]}
         context.log.info(f'Loaded configuration for {plot_name} from {yaml_path}')
     else:
-        context.log.warn(f'No configuration for {plot_name} found in {yaml_path}')
+        raise ValueError(f'No configuration for {plot_name} found in {yaml_path}')
 
     yield Output(plot_config, 'plot_config')
-    yield Output(plot_config['sql'], 'plot_sql')
+    # TODO remove
+    yield Output('need to remove', 'plot_sql')
+    # yield Output(plot_config[plot_name]['sql'], 'plot_sql')
+
 

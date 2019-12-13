@@ -279,6 +279,7 @@ def read_sj_csv_file_sets(context, sets_list: List, dtypes_by_root: Dict, prev_u
                               {'name': filename2_set2, 'path': path including filename2_set2, ...}, ...]}, ... ]
     :param dtypes_by_root: dict of dtypes dicts with root table identifier as the key
     :param prev_uploaded: details of previously loaded data sets
+    :param uploaded_ids: sales_data primary keys
     :param regex_patterns: dict of regex pattern representing filenames and file sets
     :return: dict of data with set ids as key and DataSet as value
     """
@@ -324,6 +325,14 @@ def read_sj_csv_file_sets(context, sets_list: List, dtypes_by_root: Dict, prev_u
                             df = pd.read_csv(filepath_or_buffer, dtype=dtypes)
 
                             df.rename(columns=str.strip, inplace=True)  # remove any whitespace in column names
+
+                            # remove non-USD entity amounts which shouldn't be in the data, can replace once currency
+                            # functionality is completely implemented
+                            pre_len = len(df)
+                            df = df[df['ENTITYCURRENCYCODE'] == 'USD']
+                            post_len = len(df)
+                            if pre_len > post_len:
+                                context.log.info(f"Removed '{pre_len-post_len}' non-USD ENTITYCURRENCYCODE")
 
                             df.sort_values(by=['ID'], inplace=True)
 

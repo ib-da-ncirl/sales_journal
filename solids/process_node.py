@@ -62,12 +62,12 @@ def get_table_desc_type_limits(table_desc: DataFrame) -> Dict:
     type_values = {
         'date': {'min_val': date.min, 'max_val': date.max, 'max_size': sys.getsizeof(date.min)},
         'timestamp': {'min_val': datetime.min, 'max_val': datetime.max, 'max_size': sys.getsizeof(datetime.min)},
-        'smallint': {'min_val': -2**15, 'max_val': 2**15-1, 'max_size': 2},
-        'smallserial': {'min_val': -2**15, 'max_val': 2**15-1, 'max_size': 2},
-        'int': {'min_val': -2**31, 'max_val': 2**31-1, 'max_size': 2},
-        'serial': {'min_val': -2**31, 'max_val': 2**31-1, 'max_size': 2},
-        'bigint': {'min_val': -2**63, 'max_val': 2**63-1, 'max_size': 8},
-        'bigserial': {'min_val': -2**63, 'max_val': 2**63-1, 'max_size': 8},
+        'smallint': {'min_val': -2 ** 15, 'max_val': 2 ** 15 - 1, 'max_size': 2},
+        'smallserial': {'min_val': -2 ** 15, 'max_val': 2 ** 15 - 1, 'max_size': 2},
+        'int': {'min_val': -2 ** 31, 'max_val': 2 ** 31 - 1, 'max_size': 2},
+        'serial': {'min_val': -2 ** 31, 'max_val': 2 ** 31 - 1, 'max_size': 2},
+        'bigint': {'min_val': -2 ** 63, 'max_val': 2 ** 63 - 1, 'max_size': 8},
+        'bigserial': {'min_val': -2 ** 63, 'max_val': 2 ** 63 - 1, 'max_size': 8},
         'real': {'min_val': math.exp(-37), 'max_val': math.exp(37), 'max_size': 4},
         'double precision': {'min_val': math.exp(-307), 'max_val': math.exp(308), 'max_size': 8},
         'text': {'min_val': 0, 'max_val': 0, 'max_size': 0},
@@ -111,7 +111,7 @@ def transform_sets_df(context, sets_df: Dict, table_desc: DataFrame, table_desc_
         # generate a list of the names of fields with the date types
         # also a list of formats for the date fields
         date_fields = np.concatenate((table_desc_by_type['date']['field'].values,
-                                     table_desc_by_type['timestamp']['field'].values)).tolist()
+                                      table_desc_by_type['timestamp']['field'].values)).tolist()
         date_fields_formats = np.concatenate((table_desc_by_type['date']['format'].values,
                                               table_desc_by_type['timestamp']['format'].values)).tolist()
         # generate numpy arrays of the names of fields with the same type
@@ -120,11 +120,11 @@ def transform_sets_df(context, sets_df: Dict, table_desc: DataFrame, table_desc_
         real_fields = table_desc_by_type['real']['field'].values
         double_precision_fields = table_desc_by_type['double precision']['field'].values
         text_fields = np.concatenate((table_desc_by_type['text']['field'].values,
-                                     table_desc_by_type['varchar']['field'].values))
+                                      table_desc_by_type['varchar']['field'].values))
 
         # TODO needs work, type coercion is really only for the types known to need it rather than a general method
-        for label, content in set_df.items():   # Iterator over (column name, Series) pairs
-            row = table_desc[table_desc['field'] == label].iloc[0]     # will only be one
+        for label, content in set_df.items():  # Iterator over (column name, Series) pairs
+            row = table_desc[table_desc['field'] == label].iloc[0]  # will only be one
             load_type = row['loadtype'].lower()
             data_type = row['datatype'].lower()
             if load_type != '':
@@ -140,12 +140,12 @@ def transform_sets_df(context, sets_df: Dict, table_desc: DataFrame, table_desc_
                         fidx = date_fields.index(label)
                         set_df[label] = pd.to_datetime(set_df[label], format=date_fields_formats[fidx])
                     except ValueError:
-                        pass    # ignore, no format was found
+                        pass  # ignore, no format was found
             elif label in int_fields or label in long_fields:
                 if new_type != '' and load_type == 'text':
                     # replace nan and coerce to int
                     content.fillna('0', inplace=True)
-                    set_df[label] = set_df[label].astype(int)   # no diff between int & long in python 3
+                    set_df[label] = set_df[label].astype(int)  # no diff between int & long in python 3
                 # transform empty integer fields
                 content.fillna(0, inplace=True)
             elif label in real_fields or label in double_precision_fields:
@@ -191,3 +191,87 @@ def transform_table_desc_df(context, table_desc: DataFrame) -> DataFrame:
     return table_desc
 
 
+@solid
+def currency_transform_sets_df(context, sets_df: Dict, table_desc: DataFrame, table_desc_by_type: Dict,
+                               table_type_limits: Dict, currency_eq_usd_df: DataFrame,
+                               dtypes_by_root: Dict, regex_patterns: Dict, currency_cfg: Dict) -> Dict:
+    """
+    Perform any necessary transformations on the sets panda DataFrames
+    :param context: execution context
+    :param sets_df: dict of DataSet with set ids as key
+    :param table_desc: pandas DataFrame containing details of the database table
+    :param table_desc_by_type: dict of pandas DataFrames of data types in database table with data type as the key
+    :param table_type_limits: dict of type limits with field name as the key
+    :return: dict of pandas DataFrames with set ids as key
+    :rtype: dict
+    """
+
+    raise NotImplementedError('Currency transform functionality is not yet fully supported')
+
+    entity_usd_mapping = currency_cfg['value']['entity_usd_mapping']
+
+    for set_id in sets_df.keys():
+
+        context.log.info(f"Currency transform data set {set_id}'")
+
+        set_df = sets_df[set_id].df
+
+        regex_patterns_dict = regex_patterns['value']
+        regex_item = re.compile(regex_patterns_dict['set_usd_pattern'])
+
+        # .add_solid_input('read_sj_csv_file_sets', 'regex_patterns', regex_patterns) \
+
+        usd_columns = table_desc[table_desc['root'].str.lower() == 'usd']
+
+        def add_column(field):
+            set_df[field] = 0.0
+
+        usd_columns['field'].apply(add_column)
+
+        # currency_eq_usd_df['Date'] = datetime
+        # set_df['usd_rate'] = currency_eq_usd_df.loc[currency_eq_usd_df['Date'] == set_df['SALESDATE'].date(), set_df['ENTITYCURRENCY_CODE']]
+
+        for mapping in entity_usd_mapping:
+            set_df[mapping[1]] = set_df[mapping[0]]
+
+        set_df['DateM'] = set_df['SALESDATE'].apply(lambda x: x.date())
+
+        currency_eq_usd_df['DateM'] = currency_eq_usd_df['Date'].apply(lambda x: x.date())
+
+        xx = set_df.merge(currency_eq_usd_df, left_on=['DateM'],
+                         right_on=['DateM'],
+                         how='left', suffixes=('_left', '_right'))
+
+        xx.at[0, 'ENTITYCURRENCYCODE'] = 'GBP'
+
+        entities = xx[xx['ENTITYCURRENCYCODE'] != 'USD']
+        for entity in entities:
+            xx = set_df[set_df['ENTITYCURRENCYCODE'] == entity]
+            xx[mapping[1]] = xx[mapping[0]] * xx[entity]
+
+
+            # for idx in range(len(set_df)):
+            #     row = set_df.iloc[idx]
+            #     if row['ENTITYCURRENCYCODE'] != 'USD' or idx == 0:
+            #         salesdate = set_df.loc[idx, 'SALESDATE'].date()
+            #         entity_code = set_df.loc[idx, 'ENTITYCURRENCYCODE']
+            #         set_df.loc[idx, mapping[1]] = (set_df.loc[idx, mapping[0]] * currency_eq_usd_df.loc[
+            #             currency_eq_usd_df['Date'] == salesdate, entity_code
+            #         ]).values[0]
+
+
+
+            # # YUCK definitely not 'pandaish'!
+            # for idx in range(len(set_df)):
+            #     xx.loc[idx, mapping[1]] = xx[idx, mapping[0]] * xx.loc[idx, 'ENTITYCURRENCYCODE']
+            # YUCK definitely not 'pandaish'!
+            # for idx in range(len(set_df)):
+            #     row = set_df.iloc[idx]
+            #     if row['ENTITYCURRENCYCODE'] != 'USD' or idx == 0:
+            #         salesdate = set_df.loc[idx, 'SALESDATE'].date()
+            #         entity_code = set_df.loc[idx, 'ENTITYCURRENCYCODE']
+            #         set_df.loc[idx, mapping[1]] = (set_df.loc[idx, mapping[0]] * currency_eq_usd_df.loc[
+            #             currency_eq_usd_df['Date'] == salesdate, entity_code
+            #         ]).values[0]
+
+    return sets_df

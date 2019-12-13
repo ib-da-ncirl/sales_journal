@@ -18,20 +18,372 @@
 #   output_to: where to output the result; 'file' or 'show'
 #
 
-entitybaseamount_by_salesdate:
-  type: line
-  sql: SELECT salesdate, entitybaseamount from SALES_DATA;
+monthly_avg_ancil_yoy_bar:
+  type: bar
+  # barmode stack or group
+  barmode: group
+  text_on_bar: true
+  # https://github.com/d3/d3-format
+  text_on_bar_template: "%{y:.1f}"
+  multiplot:
+    2018:
+      sql: >-
+        SELECT EXTRACT(MONTH FROM sd.salesdate) as salesmth,
+        sum(entitybaseamount) AS ancillary_sum,
+        avg(entitybaseamount) AS ancillary_avg
+        from sales_data as sd
+        where entrytype='SALE' and RESVCOMPTYPE='ANCILLARYAIR' and sd.salesdate>='startdate'::date AND sd.salesdate<='enddate'::date
+        GROUP BY salesmth
+        ORDER BY salesmth;
+      startdate: 2018-01-01
+      enddate: 2018-12-31
+    2019:
+      sql: >-
+        SELECT EXTRACT(MONTH FROM sd.salesdate) as salesmth,
+        sum(entitybaseamount) AS ancillary_sum,
+        avg(entitybaseamount) AS ancillary_avg
+        from sales_data as sd
+        where entrytype='SALE' and RESVCOMPTYPE='ANCILLARYAIR' and sd.salesdate>='startdate'::date AND sd.salesdate<='enddate'::date
+        GROUP BY salesmth
+        ORDER BY salesmth;
+      startdate: 2019-01-01
+      enddate: 2019-12-31
+
   header:
-    - salesdate
-    - entitybaseamount
+    - salesmth
+    - salesamount
   salesdate:
     to_datetime: '%Y-%m-%d'
-  title: Entity Base Amount
+  title: Average AncillaryAir Sales Per Month Year on Year
+  # column to display on x asis
+  x: salesmth
+  # list of columns to display on y axis for line/bar
+  y:
+    - ancillary_avg
+
+  transform:
+    salesmth:
+      1: Jan
+      2: Feb
+      3: Mar
+      4: Apr
+      5: May
+      6: Jun
+      7: Jul
+      8: Aug
+      9: Sep
+      10: Oct
+      11: Nov
+      12: Dec
+
+  labels:
+    salesmth: Month
+    y_data: Amount (USD)
+
+  legend:
+    salesdate: Date
+    ancillary_avg:
+      2018: 2018
+      2019: 2019
+
+  output_path: output/<plot_name>.jpg
+#  output_to: file
+  output_to: show
+#  output_to: file_show
+
+  pickle: true
+  pickle_path: output
+#  pickle_clear: true
+
+
+monthly_avg_ancil_bar:
+  type: bar
+  # barmode stack or group
+  barmode: group
+  text_on_bar: true
+  # https://github.com/d3/d3-format
+  text_on_bar_template: "%{y:.1f}"
+  sql: >-
+    SELECT date_trunc('month', sd.salesdate) as salesdate,
+    sum(entitybaseamount) AS ancillary_sum,
+    avg(entitybaseamount) AS ancillary_avg
+    from sales_data as sd
+    where entrytype='SALE' and RESVCOMPTYPE='ANCILLARYAIR' and sd.salesdate>='startdate'::date AND sd.salesdate<='enddate'::date
+    GROUP BY date_trunc('month', sd.salesdate)
+    ORDER BY date_trunc('month', sd.salesdate);
+  startdate: 2018-01-01
+  enddate: 2019-11-30
+
+  header:
+    - salesdate
+    - salesamount
+  salesdate:
+    to_datetime: '%Y-%m-%d'
+  title: Average AncillaryAir Sales Per Month
+  # column to display on x asis
   x: salesdate
-  y: entitybaseamount
+  # list of columns to display on y axis for line/bar
+  y:
+    - ancillary_avg
+
   labels:
     salesdate: Date
-    entitybaseamount: Amount (USD)
-  output_path: output/entitybaseamount_by_salesdate.jpg
+    y_data: Amount (USD)
+
+  legend:
+    salesdate: Date
+    ancillary_avg: Avg AncillaryAir
+
+  output_path: output/<plot_name>.jpg
+#  output_to: file
+  output_to: show
+#  output_to: file_show
+
+  pickle: true
+  pickle_path: output
+#  pickle_clear: true
+
+
+
+monthly_ancil_bar:
+  type: bar
+  # barmode stack or group
+  barmode: stack
+  # too busy looking
+#  text_on_bar: true
+#  # https://github.com/d3/d3-format
+#  text_on_bar_template: "%{y:.0f}"
+
+  sql: >-
+    SELECT date_trunc('month', sd.salesdate) as salesdate,
+    	sum(CASE WHEN sd.RESVCOMPTYPE='ANCILLARYAIR' AND sd.RESVCOMPSUBTYPE='BAGS' THEN entitybaseamount ELSE 0 END) AS bags,
+    	sum(CASE WHEN sd.RESVCOMPTYPE='ANCILLARYAIR' AND sd.RESVCOMPSUBTYPE='LOUNGE' THEN entitybaseamount ELSE 0 END) AS lounge,
+    	sum(CASE WHEN sd.RESVCOMPTYPE='ANCILLARYAIR' AND sd.RESVCOMPSUBTYPE='MEALS' THEN entitybaseamount ELSE 0 END) AS meals,
+    	sum(CASE WHEN sd.RESVCOMPTYPE='ANCILLARYAIR' AND sd.RESVCOMPSUBTYPE='MYPALROAM' THEN entitybaseamount ELSE 0 END) AS mypalroam,
+    	sum(CASE WHEN sd.RESVCOMPTYPE='ANCILLARYAIR' AND sd.RESVCOMPSUBTYPE='SEATFEE' THEN entitybaseamount ELSE 0 END) AS seatfee,
+    	sum(CASE WHEN sd.RESVCOMPTYPE='INSURANCE' THEN entitybaseamount ELSE 0 END) AS insurance,
+    	sum(CASE WHEN sd.RESVCOMPTYPE='MISCELLANEOUS' AND sd.RESVCOMPSUBTYPE='BOOKING_FEE' THEN entitybaseamount ELSE 0 END) AS booking_fee,
+    	sum(CASE WHEN sd.RESVCOMPTYPE='PROVIDER_PENALTY' THEN entitybaseamount ELSE 0 END) AS provider_penalty
+    	from sales_data as sd
+    	where entrytype='SALE' and sd.RESVCOMPTYPE<>'AIR' and sd.salesdate>='startdate'::date and sd.salesdate<='enddate'::date
+    	GROUP BY date_trunc('month', sd.salesdate), sd.RESVCOMPTYPE, sd.RESVCOMPSUBTYPE
+    	ORDER BY date_trunc('month', sd.salesdate), sd.RESVCOMPTYPE, sd.RESVCOMPSUBTYPE;
+  startdate: 2018-01-01
+  enddate: 2019-11-30
+
+  header:
+    - salesdate
+    - salesamount
+  salesdate:
+    to_datetime: '%Y-%m-%d'
+  title: Ancillary Sales Per Month
+  # column to display on x asis
+  x: salesdate
+  # list of columns to display on y axis for line/bar
+  y:
+    - seatfee
+    - bags
+    - lounge
+    - meals
+    - mypalroam
+    - booking_fee
+    - insurance
+    - provider_penalty
+
+  labels:
+    salesdate: Date
+    y_data: Amount (USD)
+
+  legend:
+    salesdate: Date
+    seatfee: Seat Fee
+    bags: Bags
+    lounge: Lounge
+    meals: Meals
+    mypalroam: myPALRoam
+    booking_fee: Booking Fee
+    insurance: Insurance
+    provider_penalty: Provider Penalty
+
+  output_path: output/<plot_name>.jpg
   output_to: file
+#  output_to: show
+#  output_to: file_show
+
+  pickle: true
+  pickle_path: output
+#  pickle_clear: true
+
+
+
+
+ancil_by_type_pie:
+  type: pie
+  sql: >-
+    SELECT (sd.RESVCOMPTYPE || ' ' || sd.RESVCOMPSUBTYPE) as ancillary_type,
+    sum(CASE WHEN RESVCOMPTYPE<>'AIR' THEN entitybaseamount ELSE 0 END) AS ancillary
+    from sales_data as sd
+    where entrytype='SALE' and RESVCOMPTYPE<>'AIR' and sd.salesdate>='startdate'::date and sd.salesdate<='enddate'::date
+    GROUP BY sd.RESVCOMPTYPE, sd.RESVCOMPSUBTYPE
+    ORDER BY sd.RESVCOMPTYPE, sd.RESVCOMPSUBTYPE;
+  startdate: 2018-01-01
+  enddate: 2019-11-30
+
+  header:
+    - salesdate
+    - salesamount
+
+  # https://plot.ly/python/reference/#layout-title
+  title:
+    text: Ancillary Sales By Type (Jan 2018 - Nov 2019)
+    y: 0.9
+    x: 0.95
+    xanchor: right
+    yanchor: top
+
+  # list of labels or a value of columns to use the dataframe columns
+  labels: ancillary_type
+  # list of fields from the sql or a value of columns to use the dataframe columns
+  values: ancillary
+
+  hoverinfo: label+value+percent
+  textinfo: value+percent
+  sort: false
+
+  output_path: output/<plot_name>.jpg
+  output_to: file
+#  output_to: show
+#  output_to: file_show
+
+  pickle: true
+  pickle_path: output
+#  pickle_clear: true
+
+
+ancil_by_type_nov19_pie:
+  type: pie
+  sql: >-
+    SELECT (sd.RESVCOMPTYPE || ' ' || sd.RESVCOMPSUBTYPE) as ancillary_type,
+    sum(CASE WHEN RESVCOMPTYPE<>'AIR' THEN entitybaseamount ELSE 0 END) AS ancillary
+    from sales_data as sd
+    where entrytype='SALE' and RESVCOMPTYPE<>'AIR' and sd.salesdate>='startdate'::date and sd.salesdate<='enddate'::date
+    GROUP BY sd.RESVCOMPTYPE, sd.RESVCOMPSUBTYPE
+    ORDER BY sd.RESVCOMPTYPE, sd.RESVCOMPSUBTYPE;
+  startdate: 2019-11-01
+  enddate: 2019-11-30
+
+  header:
+    - salesdate
+    - salesamount
+
+  # https://plot.ly/python/reference/#layout-title
+  title:
+    text: Ancillary Sales By Type (Nov 2019)
+    y: 0.9
+    x: 0.95
+    xanchor: right
+    yanchor: top
+
+  # list of labels or a value of columns to use the dataframe columns
+  labels: ancillary_type
+  # list of fields from the sql or a value of columns to use the dataframe columns
+  values: ancillary
+
+  hoverinfo: label+value+percent
+  textinfo: value+percent
+  sort: false
+
+  output_path: output/<plot_name>.jpg
+#  output_to: file
+  output_to: show
+#  output_to: file_show
+
+  pickle: true
+  pickle_path: output
+#  pickle_clear: true
+
+
+ebsa_by_date_bar:
+  type: bar
+  # barmode stack or group
+  barmode: stack
+  sql: >-
+    SELECT date_trunc('month', sd.salesdate) as salesdate,
+    sum(CASE WHEN RESVCOMPTYPE='AIR' THEN entitybaseamount ELSE 0 END) AS salesamount,
+    sum(CASE WHEN RESVCOMPTYPE='ANCILLARYAIR' THEN entitybaseamount ELSE 0 END) AS ancillaryair
+    from sales_data as sd
+    where sd.entrytype='SALE' AND sd.salesdate>='startdate'::date AND sd.salesdate<='enddate'::date
+    GROUP BY date_trunc('month', sd.salesdate)
+    ORDER BY date_trunc('month', sd.salesdate);
+  startdate: 2018-01-01
+  enddate: 2019-11-30
+
+  header:
+    - salesdate
+    - salesamount
+  salesdate:
+    to_datetime: '%Y-%m-%d'
+  title: Air and AncillaryAir Sales
+  x: salesdate
+  y:
+    - ancillaryair
+    - salesamount
+
+  labels:
+    salesdate: Date
+    y_data: Amount (USD)
+
+  legend:
+    salesdate: Date
+    ancillaryair: Ancillary
+    salesamount: Sales
+  output_path: output/<plot_name>.jpg
+  output_to: file
+#  output_to: show
+#  output_to: file_show
+
+  pickle: true
+  pickle_path: output
+#  pickle_clear: true
+
+
+ebsa_by_date_line:
+  type: line
+  sql: >-
+    SELECT date_trunc('month', sd.salesdate) as salesdate,
+    sum(CASE WHEN RESVCOMPTYPE='AIR' THEN entitybaseamount ELSE 0 END) AS salesamount,
+    sum(CASE WHEN RESVCOMPTYPE='ANCILLARYAIR' THEN entitybaseamount ELSE 0 END) AS ancillaryair
+    from sales_data as sd
+    where sd.entrytype='SALE' AND sd.salesdate>='startdate'::date AND sd.salesdate<='enddate'::date
+    GROUP BY date_trunc('month', sd.salesdate)
+    ORDER BY date_trunc('month', sd.salesdate);
+  startdate: 2018-01-01
+  enddate: 2019-11-30
+
+  header:
+    - salesdate
+    - salesamount
+  salesdate:
+    to_datetime: '%Y-%m-%d'
+  title: Air and AncillaryAir Sales (Jan 2018 - Nov 2019)
+  x: salesdate
+  y:
+    - ancillaryair
+    - salesamount
+  labels:
+    salesdate: Date
+    y_data: Amount (USD)
+  legend:
+    salesdate: Date
+    ancillaryair: Ancillary
+    salesamount: Sales
+  output_path: output/<plot_name>.jpg
+  output_to: file
+#  output_to: show
+#  output_to: file_show
+
+  pickle: true
+  pickle_path: output
+#  pickle_clear: true
+
 

@@ -37,3 +37,13 @@ def create_tables(create_columns: String, create_tracking_columns: String):
 
     create_data_table(create_columns)
     create_tracking_table(create_tracking_columns)
+
+
+@composite_solid()
+def create_currency_tables(create_columns: String):
+    """
+    Create postgres tables
+    """
+    create_currency_table = create_table.alias('create_currency_table')
+
+    create_currency_table(create_columns)

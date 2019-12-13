@@ -27,7 +27,8 @@ from dagster_toolkit.environ import (
     EnvironmentDict,
 )
 from solids import (
-    drop_tables
+    drop_tables,
+    drop_currency_tables,
 )
 import pprint
 
@@ -56,8 +57,6 @@ def execute_clean_sales_data_postgres_pipeline(sj_config: dict, postgres_warehou
     :param postgres_warehouse: postgres server resource
     """
 
-    # .add_solid_input('does_psql_table_exist', 'name', sj_config['tracking_table_query']) \
-
     # environment dictionary
     env_dict = EnvironmentDict() \
         .add_composite_solid_input('drop_tables', 'drop_sales_table', 'table_name',
@@ -71,5 +70,43 @@ def execute_clean_sales_data_postgres_pipeline(sj_config: dict, postgres_warehou
     pp.pprint(env_dict)
 
     result = execute_pipeline(clean_sales_data_postgres_pipeline, environment_dict=env_dict)
+    assert result.success
+
+
+@pipeline(
+    mode_defs=[
+        ModeDefinition(
+            # attach resources to pipeline
+            resource_defs={
+                'postgres_warehouse': postgres_warehouse_resource,
+            }
+        )
+    ]
+)
+def clean_currency_data_postgres_pipeline():
+    """
+    Definition of the pipeline to clear currency data from Postgres
+    """
+    drop_currency_tables()
+
+
+def execute_clean_currency_data_postgres_pipeline(cur_config: dict, postgres_warehouse: dict):
+    """
+    Execute the pipeline to clear currency data from Postgres
+    :param cur_config: app configuration
+    :param postgres_warehouse: postgres server resource
+    """
+
+    # environment dictionary
+    env_dict = EnvironmentDict() \
+        .add_composite_solid_input('drop_currency_tables', 'drop_currency_table', 'table_name',
+                                   cur_config['currency_data_table']) \
+        .add_resource('postgres_warehouse', postgres_warehouse) \
+        .build()
+
+    pp = pprint.PrettyPrinter(indent=2)
+    pp.pprint(env_dict)
+
+    result = execute_pipeline(clean_currency_data_postgres_pipeline, environment_dict=env_dict)
     assert result.success
 

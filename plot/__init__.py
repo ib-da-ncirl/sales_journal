@@ -19,9 +19,12 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from .ploy_node import initialise_plot
+from .plot_node import (
+    initialise_plot,
+)
 from .process_for_plot_node import (
     process_plot,
+    process_sql_plot,
     transform_plot_data,
 )
 
@@ -32,4 +35,5 @@ __all__ = [
     'initialise_plot',
     'transform_plot_data',
     'process_plot',
+    'process_sql_plot',
 ]

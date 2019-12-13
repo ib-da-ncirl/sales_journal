@@ -4,7 +4,7 @@ ignore,root,field,source,save,loadtype,datatype,primary_key,not_null,default,for
 #,,"ignore column: Lines marked with #, are treated as comments and dropped when the file is loaded",,,,,,,,,
 #,,root column: the value is used to identify entries from the same csv file,,,,,,,,,
 #,,"NOTE: The value in the root column should generate a match with the regex used to match the names of individual csv files in a set, e.g. ‘SJ_’ is the unique portion of the Sales Journal csv export filename",,,,,,,,,
-#,,"source column: indicates whether the field was optional (O)or mandatory (M) in the source database, or is an indicator (I) or generated (G) ",,,,,,,,,
+#,,"source column: indicates whether the field was optional (O) or mandatory (M) in the source database, or is an indicator (I) or generated (G) ",,,,,,,,,
 #,,save column: indicates if the field should be saved (y) to the postgres database,,,,,,,,,
 #,,loadtype column: the data type to use to load the column into a pandas DataFrame. By default the type is inferred based on the datatype column.,,,,,,,,,
 #,,datatype column: the data type to use for the column when creating the database table,,,,,,,,,
@@ -80,3 +80,8 @@ ignore,root,field,source,save,loadtype,datatype,primary_key,not_null,default,for
 ,SJSeg_,BOOKINGCLASS,O,y,,TEXT,,,,,Booking Class
 ,SJSeg_,FLIGHTNUMBER,O,y,,TEXT,,,,,Flight Number
 ,SJSeg_,SEGMENTS,G,y,,TEXT,,,,,"Merged string representing the combination of segments (combined result of Origin airport code, Destination airport code & Flight sequence)"
+#,,Fields generated to work-around non-USD amounts in entity columns,,,,,,,,,
+#,USD,USDBASEAMOUNT,G,y,,REAL,,,0,,USD base amount
+#,USD,USDTOTALTAXAMOUNT,G,y,,REAL,,,0,,USD total tax amount
+#,USD,USDTOTALPROMOTIONAMOUNT,G,y,,REAL,,,0,,USD Total Promotion Amount
+#,USD,USDPROMOTIONAMOUNT,G,y,,REAL,,,0,,Promotion amount in USD

@@ -46,9 +46,9 @@ def generate_tracking_table_fields_str(context, tracking_data_columns: Dict):
     names = tracking_data_columns['value']['names']
     defs = tracking_data_columns['value']['defs']
     auto = tracking_data_columns['value']['auto']
-    if len(names) != len(defs):
-        raise Failure(f'Configuration error: tracking column name count ({len(names)}) does not match'
-                      f'tracking column definition count ({len(defs)})')
+    if len(names) != len(defs) or len(names) != len(auto):
+        raise Failure(f'Configuration error: column definition counts do not match: names ({len(names)}), '
+                      f'definitions ({len(defs)}), auto ({len(auto)})')
 
     # add fields from the table description
     create_tracking_columns = ''
