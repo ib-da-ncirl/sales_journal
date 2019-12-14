@@ -86,6 +86,9 @@ def execute_file_ip_sql_to_plot_pipeline(sj_config: Dict, plotly_cfg: String, po
     :param plot_cfg_path: path to plot configuration file
     :param plot_name: name of plot to produce
     """
+    if not isinstance(plotly_cfg, str):
+        plotly_cfg = ''
+
     # environment dictionary
     env_dict = EnvironmentDict() \
         .add_solid_input('initialise_plot', 'yaml_path', plot_cfg_path) \

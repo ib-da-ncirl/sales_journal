@@ -253,6 +253,9 @@ def process_sql_plot(context, plot_info: Dict, plotly_cfg: String):
                 output_path = config_key_lower(plot_config, 'output_path')
                 if '<plot_name>' in output_path:
                     output_path = output_path.replace('<plot_name>', plot_name)
+
+                context.log.info(f"Saving '{plot_name}' to '{output_path}'")
+
                 fig.write_image(output_path)
                 output_cnt += 1
             if 'show' in output_to:
@@ -288,7 +291,7 @@ def process_plot(context, plot_info: Dict, plot_config: Dict, plotly_cfg: String
         # and add the dates as another column
         grouped_df[plot_config['x']] = data.index
 
-        if plotly_cfg is not None:
+        if plotly_cfg is not None and len(plotly_cfg):
             plotly.io.orca.config.executable = plotly_cfg
 
         plot_type = plot_config['type'].lower()
