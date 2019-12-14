@@ -300,6 +300,7 @@ def process_plot(context, plot_info: Dict, plot_config: Dict, plotly_cfg: String
         output_to = plot_config['output_to'].lower()
         output_cnt = 0
         if 'file' in output_to:
+            context.log.info(f"Saving '{key}' to '{plot_config['output_path']}'")
             fig.write_image(plot_config['output_path'])
             output_cnt += 1
         if 'show' in output_to:
