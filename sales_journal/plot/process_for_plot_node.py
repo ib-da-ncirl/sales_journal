@@ -288,7 +288,7 @@ def process_plot(context, plot_info: Dict, plot_config: Dict, plotly_cfg: String
         # and add the dates as another column
         grouped_df[plot_config['x']] = data.index
 
-        if plotly_cfg is not None:
+        if plotly_cfg is not None and len(plotly_cfg):
             plotly.io.orca.config.executable = plotly_cfg
 
         plot_type = plot_config['type'].lower()
