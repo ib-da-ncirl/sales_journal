@@ -24,10 +24,15 @@ setuptools.setup(
     install_requires=[
       'psycopg2>=2.8.4',
       'pymongo>=3.9.0',
+      'azure-cosmos>=3.1.2',
       'dagster>=0.6.4',
       'dagit>=0.6.4',
       'dagster_pandas>=0.6.4',
-      'pandas>=0.25.3'
+      'pandas>=0.25.3',
+      'plotly>=4.3.0',
+      'PyYAML>=5.1.2',
+      'psutil>=5.6.7',
+      'Menu>=3.2.2'
     ],
     dependency_links=[
         'git+https://github.com/ib-da-ncirl/db_toolkit.git#egg=db_toolkit',
