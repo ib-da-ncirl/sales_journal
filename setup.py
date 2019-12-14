@@ -7,7 +7,7 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 version = {}
-with open(os.path.join(_here, 'version.py')) as f:
+with open(os.path.join(_here, 'sales_journal', 'version.py')) as f:
     exec(f.read(), version)
 
 setuptools.setup(

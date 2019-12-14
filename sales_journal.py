@@ -19,7 +19,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 import yaml
-from dagster import execute_pipeline, pipeline, ModeDefinition, String, Dict
+from dagster import String, Dict
 from menu import Menu
 import os.path as path
 import sys
@@ -27,16 +27,13 @@ import getopt
 from collections import namedtuple
 
 from db_toolkit.misc import (
-    get_dir_path,
     get_file_path,
     test_file_path,
     load_yaml
 )
-from pipelines import (
+from sales_journal.pipelines import (
     execute_csv_to_postgres_pipeline,
     execute_csv_currency_to_postgres_pipeline,
-    execute_postgres_to_plot_pipeline,
-    execute_file_ip_postgres_to_plot_pipeline,
     execute_file_ip_sql_to_plot_pipeline,
     execute_create_sales_data_postgres_pipeline,
     execute_create_currency_data_postgres_pipeline,
@@ -170,8 +167,8 @@ def get_short_opt(o_key) -> str:
 
 def long_short_opt(o_key) -> list:
     long_opt = ''
-    if key in __OPTS.keys():
-        long_opt = '--' + __OPTS[key].long
+    if o_key in __OPTS.keys():
+        long_opt = '--' + __OPTS[o_key].long
     return long_opt
 
 
@@ -191,7 +188,9 @@ def usage(name):
     print()
 
 
-if __name__ == '__main__':
+
+
+def main():
 
     try:
         opts, args = getopt.getopt(sys.argv[1:], get_short_opts(), long_short_opts())
@@ -327,3 +326,10 @@ if __name__ == '__main__':
         call_execute_create_currency_data_postgres_pipeline()
     elif pipeline == 'clean_currency_data_postgres_pipeline':
         call_execute_clean_currency_data_postgres_pipeline()
+
+
+
+
+if __name__ == '__main__':
+
+    main()

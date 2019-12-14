@@ -36,7 +36,7 @@ import plotly
 import plotly.express as px
 import plotly.graph_objects as go
 
-from misc import test_dir_path, test_file_path
+from db_toolkit.misc import test_dir_path, test_file_path
 
 
 @solid

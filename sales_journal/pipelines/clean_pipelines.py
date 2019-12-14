@@ -26,7 +26,7 @@ from dagster_toolkit.postgres import (
 from dagster_toolkit.environ import (
     EnvironmentDict,
 )
-from solids import (
+from sales_journal.solids import (
     drop_tables,
     drop_currency_tables,
 )

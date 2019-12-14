@@ -27,7 +27,6 @@ from dagster import (
     OutputDefinition, Output, Optional, Field, Bool)
 from dagster_pandas import DataFrame
 from bitarray import bitarray
-from misc_sj import BitArray
 
 
 @solid(

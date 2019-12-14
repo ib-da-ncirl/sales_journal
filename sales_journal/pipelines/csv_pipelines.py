@@ -31,7 +31,7 @@ from dagster_toolkit.environ import (
     EnvironmentDict,
 )
 from .currency_pipelines import currency_pipeline_environmental_dict
-from solids import (
+from sales_journal.solids import (
     generate_table_fields_str,
     upload_sales_table,
     get_table_desc_by_type,

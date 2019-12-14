@@ -24,16 +24,14 @@ from dagster import (
     pipeline,
     ModeDefinition,
     Dict,
-    String,
 )
 from dagster_toolkit.postgres import (
     postgres_warehouse_resource,
-    query_table,
 )
 from dagster_toolkit.environ import (
     EnvironmentDict,
 )
-from solids import (
+from sales_journal.solids import (
     read_currency_codes,
     generate_currency_table_fields_str,
     read_sdr_per_currency,

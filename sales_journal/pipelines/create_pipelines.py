@@ -29,7 +29,7 @@ from dagster_toolkit.files import (
 from dagster_toolkit.environ import (
     EnvironmentDict,
 )
-from solids import (
+from sales_journal.solids import (
     generate_table_fields_str,
     create_tables,
     transform_table_desc_df,

@@ -26,14 +26,13 @@ import os.path as path
 from os import listdir
 from os.path import isfile, join
 from datetime import datetime
-from bitarray import bitarray
 
 from gzip import GzipFile
 
 from dagster_pandas import DataFrame
 
 from db_toolkit.misc import test_dir_path
-from misc_sj import DataSet
+from sales_journal.misc_sj import DataSet
 from dagster import (
     solid,
     String,

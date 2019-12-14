@@ -33,7 +33,7 @@ from dagster_toolkit.postgres import (
 from dagster_toolkit.environ import (
     EnvironmentDict,
 )
-from plot import (
+from sales_journal.plot import (
     initialise_plot,
     transform_plot_data,
     process_plot,
