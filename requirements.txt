@@ -1,13 +1,14 @@
 psycopg2>=2.8.4
-pymongo>=3.9.0
-dagster>=0.6.5
-dagit>=0.6.5
-dagster_pandas>=0.6.5
+pymongo>=3.10.0
+dagster>=0.6.6
+dagit>=0.6.6
+dagster_pandas>=0.6.6
 pandas>=0.25.3
-plotly>=4.3.0
-PyYAML>=5.1.2
+plotly>=4.4.1
+PyYAML>=3.13   # dagster 0.6.6 has requirement PyYAML<5,>=3.10
 psutil>=5.6.7
 Menu>=3.2.2
 azure-cosmos>=3.1.2
+bitarray>=1.2.0
 git+https://github.com/ib-da-ncirl/dagster_toolkit.git#egg=dagster_toolkit
 
