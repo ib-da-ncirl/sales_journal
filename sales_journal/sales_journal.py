@@ -161,6 +161,7 @@ def get_config_options():
         'n': ConfigOpt('n:', 'plot_name=', 'Specify plot to render from plots script'),
         's': ConfigOpt('s:', 'file_set=', 'Comma-separated list of file set(s) to load for processing'),
         'd': ConfigOpt('d:', 'data_dir=', 'Directory from which to load file set(s) for processing'),
+        'w': ConfigOpt('w:', 'whse_cfg=', 'Specify path to postgres data warehouse table'),
         'm': ConfigOpt('m:', 'mode=', 'File set processing mode; normal (run once) or loop (run until all file sets '
                                       'processed'),
     }
@@ -236,7 +237,8 @@ def get_app_config(name, args):
         'n': None,
         's': None,
         'd': None,
-        'm': None
+        'm': None,
+        'w': None,
     }
     for opt, arg in opts:
         if opt == get_short_opt('h') or opt == get_long_opt('h'):
@@ -296,6 +298,8 @@ def get_app_config(name, args):
         sj_config['db_data_path'] = cmd_line_args['d']
     # if cmd_line_args['m'] is not None:
     #     sj_config['csv_pipeline_run_mode'] = cmd_line_args['m']
+    if cmd_line_args['w'] is not None:
+        sj_config['sales_data_desc'] = cmd_line_args['w']
 
     return app_cfg, plotly_cfg
 
