@@ -156,7 +156,7 @@ def get_config_options():
     __OPTS = {
         'h': ConfigOpt('h', 'help', 'Display usage'),
         'c': ConfigOpt('c:', 'cfg_path=', 'Specify path to configuration script'),
-        'o': ConfigOpt('o:', 'plotly_exe=', 'Specify path to the plotly orca executable'),
+        'o': ConfigOpt('o:', 'orca_exe=', 'Specify path to the plotly orca executable'),
         'p': ConfigOpt('p:', 'plot_path=', 'Specify path to plots configuration'),
         'n': ConfigOpt('n:', 'plot_name=', 'Specify plot to render from plots script'),
         's': ConfigOpt('s:', 'file_set=', 'Comma-separated list of file set(s) to load for processing'),
@@ -233,7 +233,7 @@ def get_app_config(name, args):
     cmd_line_args = {
         'o': None,
         'p': None,
-        'p': None,
+        'n': None,
         's': None,
         'd': None,
         'm': None
@@ -272,25 +272,28 @@ def get_app_config(name, args):
 
     # get plotly config
     plotly_cfg = None
+    plotly_cfg_keys = ['plotly', 'orca', 'executable']
     if cmd_line_args['o'] is None:
         cfg = app_cfg
-        for key in ['plotly', 'orca', 'executable']:
+        for key in plotly_cfg_keys:
             if key in cfg.keys():
                 cfg = cfg[key]
-                if key == 'executable':
+                if key == plotly_cfg_keys[-1]:
                     plotly_cfg = cfg
+            else:
+                break
+    else:
+        plotly_cfg = cmd_line_args['o']
+
     # TODO disabled cmd line args for now not fully tested
-    # else:
-    #     app_cfg['plotly']['orca']['executable'] = cmd_line_args['o']
-    #
     # if cmd_line_args['n'] is not None:
     #     sj_config['plot_name'] = cmd_line_args['n']
     if cmd_line_args['p'] is not None:
         sj_config['plots_cfg'] = cmd_line_args['p']
     # if cmd_line_args['s'] is not None:
     #     sj_config['load_file_sets'] = cmd_line_args['s']
-    # if cmd_line_args['d'] is not None:
-    #     sj_config['db_data_path'] = cmd_line_args['d']
+    if cmd_line_args['d'] is not None:
+        sj_config['db_data_path'] = cmd_line_args['d']
     # if cmd_line_args['m'] is not None:
     #     sj_config['csv_pipeline_run_mode'] = cmd_line_args['m']
 

@@ -57,7 +57,6 @@ def sql_to_plot_pipeline():
     Definition of the pipeline to plot
     """
 
-
     # plot_config = initialise_plot()
     plot_config, plot_sql = initialise_plot()
 
@@ -73,11 +72,11 @@ def execute_sql_to_plot_pipeline(sj_config: Dict, plotly_cfg: String, postgres_w
     :param plot_name: name of plot to produce
     """
     execute_file_ip_sql_to_plot_pipeline(sj_config, plotly_cfg, postgres_warehouse,
-                                              sj_config['plots_cfg'], plot_name)
+                                         sj_config['plots_cfg'], plot_name)
 
 
 def execute_file_ip_sql_to_plot_pipeline(sj_config: Dict, plotly_cfg: String, postgres_warehouse: Dict,
-                                              plot_cfg_path: String, plot_name: String):
+                                         plot_cfg_path: String, plot_name: String):
     """
     Execute the pipeline to create a plot
     :param sj_config: app configuration
@@ -167,4 +166,3 @@ def execute_file_ip_postgres_to_plot_pipeline(sj_config: Dict, plotly_cfg: Strin
 
     result = execute_pipeline(dataframe_to_plot_pipeline, environment_dict=env_dict)
     assert result.success
-

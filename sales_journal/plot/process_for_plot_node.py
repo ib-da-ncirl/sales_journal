@@ -232,8 +232,11 @@ def process_sql_plot(context, plot_info: Dict, plotly_cfg: String):
                     if pickle_for_later(for_pickling):
                         context.log.info(f"Pickled '{plot_name}'")
 
+            enable_static = True
             if plotly_cfg is not None and len(plotly_cfg):
                 plotly.io.orca.config.executable = plotly_cfg
+            else:
+                enable_static = False
 
             context.log.info(f"Generating plot '{plot_name}'")
 
@@ -249,20 +252,26 @@ def process_sql_plot(context, plot_info: Dict, plotly_cfg: String):
 
             output_to = config_key_lower(plot_config, 'output_to')
             output_cnt = 0
+            target_cnt = 0
             if 'file' in output_to:
-                output_path = config_key_lower(plot_config, 'output_path')
-                if '<plot_name>' in output_path:
-                    output_path = output_path.replace('<plot_name>', plot_name)
+                target_cnt += 1
+                if not enable_static:
+                    context.log.info(f"Static plots are currently disabled")
+                else:
+                    output_path = config_key_lower(plot_config, 'output_path')
+                    if '<plot_name>' in output_path:
+                        output_path = output_path.replace('<plot_name>', plot_name)
 
-                context.log.info(f"Saving '{plot_name}' to '{output_path}'")
+                    context.log.info(f"Saving '{plot_name}' to '{output_path}'")
 
-                fig.write_image(output_path)
-                output_cnt += 1
+                    fig.write_image(output_path)
+                    output_cnt += 1
             if 'show' in output_to:
+                target_cnt += 1
                 fig.show()
                 output_cnt += 1
 
-            if output_cnt == 0:
+            if output_cnt == 0 and target_cnt == 0:
                 context.log.info(f"Unknown output destination ({output_to}) for '{plot_name}'")
 
 
@@ -291,8 +300,11 @@ def process_plot(context, plot_info: Dict, plot_config: Dict, plotly_cfg: String
         # and add the dates as another column
         grouped_df[plot_config['x']] = data.index
 
+        enable_static = True
         if plotly_cfg is not None and len(plotly_cfg):
             plotly.io.orca.config.executable = plotly_cfg
+        else:
+            enable_static = False
 
         plot_type = plot_config['type'].lower()
         if plot_type == 'line':
@@ -302,14 +314,20 @@ def process_plot(context, plot_info: Dict, plot_config: Dict, plotly_cfg: String
 
         output_to = plot_config['output_to'].lower()
         output_cnt = 0
+        target_cnt = 0
         if 'file' in output_to:
-            context.log.info(f"Saving '{key}' to '{plot_config['output_path']}'")
-            fig.write_image(plot_config['output_path'])
-            output_cnt += 1
+            target_cnt += 1
+            if not enable_static:
+                context.log.info(f"Static plots are currently disabled")
+            else:
+                context.log.info(f"Saving '{key}' to '{plot_config['output_path']}'")
+                fig.write_image(plot_config['output_path'])
+                output_cnt += 1
         if 'show' in output_to:
+            target_cnt += 1
             fig.show()
             output_cnt += 1
-        if output_cnt == 0:
+        if output_cnt == 0 and target_cnt == 0:
             context.log.info(f"Unknown output destination ({output_to}) for '{plot_config['title']}'")
 
 
