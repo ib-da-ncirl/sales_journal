@@ -226,7 +226,8 @@ def process_sql_plot(context, plot_info: Dict, plotly_cfg: String):
                     dfs[plot_name] = pd.read_sql(
                         get_sql(plot_config), client
                     )
-                    for_pickling[pkl_cfg['pkl_name']] = dfs[plot_name]
+                    if for_pickling is not None:
+                        for_pickling[pkl_cfg['pkl_name']] = dfs[plot_name]
 
                 if for_pickling is not None:
                     if pickle_for_later(for_pickling):
