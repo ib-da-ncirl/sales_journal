@@ -232,7 +232,7 @@ def process_sql_plot(context, plot_info: Dict, plotly_cfg: String):
                     if pickle_for_later(for_pickling):
                         context.log.info(f"Pickled '{plot_name}'")
 
-            if plotly_cfg is not None:
+            if plotly_cfg is not None and len(plotly_cfg):
                 plotly.io.orca.config.executable = plotly_cfg
 
             context.log.info(f"Generating plot '{plot_name}'")

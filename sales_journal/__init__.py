@@ -19,11 +19,31 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+from .sales_journal import (
+    get_app_config,
+    make_call_execute_csv_to_postgres_pipeline,
+    make_call_execute_csv_currency_to_postgres_pipeline,
+    make_call_execute_interactive_plot_pipeline,
+    make_call_execute_currency_to_postgres_pipeline,
+    make_call_execute_create_sales_data_postgres_pipeline,
+    make_call_execute_create_currency_data_postgres_pipeline,
+    make_call_execute_clean_sales_data_postgres_pipeline,
+    make_call_execute_clean_currency_data_postgres_pipeline,
+)
 from .solids.__init__ import __all__ as solids_all
 from .plot.__init__ import __all__ as plot_all
 from .pipelines.__init__ import __all__ as pipelines_all
 from .misc_sj.__init__ import __all__ as misc_sj_all
 
-# if somebody does "from db_toolkit import *", this is what they will
+# if somebody does "from sales_journal import *", this is what they will
 # be able to access:
-__all__ = solids_all + plot_all + pipelines_all + misc_sj_all
+__all__ = ['get_app_config',
+           'make_call_execute_csv_to_postgres_pipeline',
+           'make_call_execute_csv_currency_to_postgres_pipeline',
+           'make_call_execute_interactive_plot_pipeline',
+           'make_call_execute_currency_to_postgres_pipeline',
+           'make_call_execute_create_sales_data_postgres_pipeline',
+           'make_call_execute_create_currency_data_postgres_pipeline',
+           'make_call_execute_clean_sales_data_postgres_pipeline',
+           'make_call_execute_clean_currency_data_postgres_pipeline'
+           ] + solids_all + plot_all + pipelines_all + misc_sj_all

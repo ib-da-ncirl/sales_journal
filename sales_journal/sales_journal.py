@@ -75,7 +75,7 @@ def interactive_plot(sj_config: dict, plotly_config: String, postgres_warehouse_
     :param plotly_config: plotly configuration
     :param postgres_warehouse_resrc: postgres server resource
     """
-    plot_cfg_path = ''
+    plot_cfg_path = sj_config['plots_cfg']
     plot_name = ''
 
     # dev HACK
@@ -92,7 +92,8 @@ def interactive_plot(sj_config: dict, plotly_config: String, postgres_warehouse_
     while loop:
         entering = True
         while entering:
-            plot_cfg_path = get_user_input('Enter path to plot configuration file', plot_cfg_path)
+            if len(plot_cfg_path) == 0:
+                plot_cfg_path = get_user_input('Enter path to plot configuration file', plot_cfg_path)
             loop = plot_cfg_path.lower() != 'q'
             if loop:
                 if not path.exists(plot_cfg_path):
@@ -107,6 +108,27 @@ def interactive_plot(sj_config: dict, plotly_config: String, postgres_warehouse_
                 break
 
         if loop:
+            plots_config = load_yaml(plot_cfg_path)
+            print(f'The following plots are available:')
+            width = 0
+            details = []
+            for name in plots_config.keys():
+                title = ''
+                cfg = plots_config[name]
+                if 'title' in cfg.keys():
+                    title = cfg['title']
+                    if isinstance(title, dict):
+                        cfg = title
+                        if 'text' in cfg.keys():
+                            title = cfg['text']
+                if len(name) > width:
+                    width = len(name)
+                details.append((name, title))
+
+            fmt = f'  \x7b0:<{width}\x7d -- \x7b1\x7d'
+            for name, title in details:
+                print(fmt.format(name, title))
+
             entering = True
             while entering:
                 plot_name = get_user_input('Enter plot name', plot_name)
@@ -129,95 +151,104 @@ def interactive_plot(sj_config: dict, plotly_config: String, postgres_warehouse_
                     break
 
 
-ConfigOpt = namedtuple('ConfigOpt', ['short', 'long', 'desc'])
-__OPTS = {
-    'h': ConfigOpt('h', 'help', 'Display usage'),
-    'c': ConfigOpt('c:', 'cfg_path=', 'Specify path to configuration script'),
-    'pe': ConfigOpt('pe:', 'plotly_exe=', 'Specify path to the plotly executable'),
-    'pp': ConfigOpt('pp:', 'plot_path=', 'Specify path to plots configuration'),
-    'p': ConfigOpt('p:', 'plot_name=', 'Specify plot to render from plots script'),
-    'fs': ConfigOpt('fs:', 'file_set=', 'Comma-separated list of file set(s) to load for processing'),
-    'dd': ConfigOpt('dd:', 'data_dir=', 'Directory from which to load file set(s) for processing'),
-    'm': ConfigOpt('m:', 'mode=', 'File set processing mode; normal (run once) or loop (run until all file sets '
-                                  'processed'),
-}
+def get_config_options():
+    ConfigOpt = namedtuple('ConfigOpt', ['short', 'long', 'desc'])
+    __OPTS = {
+        'h': ConfigOpt('h', 'help', 'Display usage'),
+        'c': ConfigOpt('c:', 'cfg_path=', 'Specify path to configuration script'),
+        'o': ConfigOpt('o:', 'plotly_exe=', 'Specify path to the plotly orca executable'),
+        'p': ConfigOpt('p:', 'plot_path=', 'Specify path to plots configuration'),
+        'n': ConfigOpt('n:', 'plot_name=', 'Specify plot to render from plots script'),
+        's': ConfigOpt('s:', 'file_set=', 'Comma-separated list of file set(s) to load for processing'),
+        'd': ConfigOpt('d:', 'data_dir=', 'Directory from which to load file set(s) for processing'),
+        'm': ConfigOpt('m:', 'mode=', 'File set processing mode; normal (run once) or loop (run until all file sets '
+                                      'processed'),
+    }
+    return __OPTS;
 
 
 def get_short_opts() -> str:
     opts_lst = ''
-    for o_key in __OPTS.keys():
-        opts_lst += __OPTS[o_key].short
+    options = get_config_options()
+    for o_key in options.keys():
+        opts_lst += options[o_key].short
     return opts_lst
 
 
-def long_short_opts() -> list:
+def get_long_opts() -> list:
     opts_lst = []
-    for o_key in __OPTS.keys():
-        if __OPTS[o_key].long is not None:
-            opts_lst.append(__OPTS[o_key].long)
+    options = get_config_options()
+    for o_key in options.keys():
+        if options[o_key].long is not None:
+            opts_lst.append(options[o_key].long)
     return opts_lst
 
 
 def get_short_opt(o_key) -> str:
     short_opt = ''
-    if o_key in __OPTS.keys():
-        short_opt = '-' + __OPTS[o_key].short
+    options = get_config_options()
+    if o_key in options.keys():
+        short_opt = '-' + options[o_key].short
+        if short_opt.endswith(':'):
+            short_opt = short_opt[:-1]
     return short_opt
 
 
-def long_short_opt(o_key) -> list:
+def get_long_opt(o_key) -> str:
     long_opt = ''
-    if o_key in __OPTS.keys():
-        long_opt = '--' + __OPTS[o_key].long
+    options = get_config_options()
+    if o_key in options.keys():
+        long_opt = '--' + options[o_key].long
+        if long_opt.endswith('='):
+            long_opt = long_opt[:-1]
     return long_opt
 
 
 def usage(name):
     print(f'Usage: {name}')
-    for o_key in __OPTS:
-        opt_info = __OPTS[o_key]
+    options = get_config_options()
+    for o_key in options:
+        opt_info = options[o_key]
         if opt_info.short.endswith(':'):
-            short_opt = opt_info.short[:-1]
+            short_opt = opt_info.short + '<value>'
         else:
             short_opt = opt_info.short
         if opt_info.long.endswith('='):
-            long_opt = opt_info.long[:-1] + '<value>'
+            long_opt = opt_info.long + '<value>'
         else:
             long_opt = opt_info.long
-        print(f' -{short_opt:3.3s}|--{long_opt:18.18s} : {opt_info.desc}')
+        print(f' -{short_opt:10.10s}|--{long_opt:18.18s} : {opt_info.desc}')
     print()
 
 
-
-
-def main():
-
+def get_app_config(name, args):
     try:
-        opts, args = getopt.getopt(sys.argv[1:], get_short_opts(), long_short_opts())
+        opts, args = getopt.getopt(args, get_short_opts(), get_long_opts())
     except getopt.GetoptError as err:
         print(err)
-        usage(sys.argv[0])
+        usage(name)
         sys.exit(2)
 
-    app_cfg_path = 'config.yaml'  # default in project root
+    app_cfg_path = '../config.yaml'  # default in project root
     cmd_line_args = {
-        'pe': None,
-        'pp': None,
+        'o': None,
         'p': None,
-        'fs': None,
-        'dd': None,
+        'p': None,
+        's': None,
+        'd': None,
         'm': None
     }
     for opt, arg in opts:
-        if opt == get_short_opt('h'):
-            usage(sys.argv[0])
+        if opt == get_short_opt('h') or opt == get_long_opt('h'):
+            usage(name)
             sys.exit()
-        elif opt == get_short_opt('c'):
+        elif opt == get_short_opt('c') or opt == get_long_opt('c'):
             app_cfg_path = arg
         else:
-            for key in ['pe', 'pp', 'p', 'fs', 'dd', 'm']:
-                if opt == get_short_opt(key):
+            for key in ['o', 'p', 'n', 's', 'd', 'm']:
+                if opt == get_short_opt(key) or opt == get_long_opt(key):
                     cmd_line_args[key] = arg
+                    break
 
     # get path to config file
     if not test_file_path(app_cfg_path):
@@ -237,63 +268,122 @@ def main():
     else:
         raise EnvironmentError(f'Missing configuration')
 
+    sj_config = app_cfg['sales_journal']
+
     # get plotly config
     plotly_cfg = None
-    if cmd_line_args['pe'] is None:
+    if cmd_line_args['o'] is None:
         cfg = app_cfg
         for key in ['plotly', 'orca', 'executable']:
             if key in cfg.keys():
                 cfg = cfg[key]
                 if key == 'executable':
                     plotly_cfg = cfg
-    else:
-        app_cfg['plotly']['orca']['executable'] = cmd_line_args['pe']
-
     # TODO disabled cmd line args for now not fully tested
-    # if cmd_line_args['p'] is not None:
-    #     app_cfg['sales_journal']['plot_name'] = cmd_line_args['p']
-    # if cmd_line_args['pp'] is not None:
-    #     app_cfg['sales_journal']['plots_cfg'] = cmd_line_args['pp']
-    # if cmd_line_args['fs'] is not None:
-    #     app_cfg['sales_journal']['load_file_sets'] = cmd_line_args['fs']
-    # if cmd_line_args['dd'] is not None:
-    #     app_cfg['sales_journal']['db_data_path'] = cmd_line_args['dd']
+    # else:
+    #     app_cfg['plotly']['orca']['executable'] = cmd_line_args['o']
+    #
+    # if cmd_line_args['n'] is not None:
+    #     sj_config['plot_name'] = cmd_line_args['n']
+    if cmd_line_args['p'] is not None:
+        sj_config['plots_cfg'] = cmd_line_args['p']
+    # if cmd_line_args['s'] is not None:
+    #     sj_config['load_file_sets'] = cmd_line_args['s']
+    # if cmd_line_args['d'] is not None:
+    #     sj_config['db_data_path'] = cmd_line_args['d']
     # if cmd_line_args['m'] is not None:
-    #     app_cfg['sales_journal']['csv_pipeline_run_mode'] = cmd_line_args['m']
+    #     sj_config['csv_pipeline_run_mode'] = cmd_line_args['m']
+
+    return app_cfg, plotly_cfg
+
+
+def make_call_execute_csv_to_postgres_pipeline(sj_cfg, postgres_warehouse):
+    def call_execute_csv_to_postgres_pipeline():
+        execute_csv_to_postgres_pipeline(sj_cfg, postgres_warehouse)
+    return call_execute_csv_to_postgres_pipeline
+
+
+def make_call_execute_csv_currency_to_postgres_pipeline(sj_cfg, postgres_warehouse):
+    def call_execute_csv_currency_to_postgres_pipeline():
+        raise NotImplementedError('All plots functionality is not yet fully supported')
+        execute_csv_currency_to_postgres_pipeline(sj_cfg, postgres_warehouse)
+    return call_execute_csv_currency_to_postgres_pipeline
+
+
+def make_call_execute_interactive_plot_pipeline(sj_cfg, plotly_cfg, postgres_warehouse):
+    def call_execute_interactive_plot_pipeline():
+        interactive_plot(sj_cfg, plotly_cfg, postgres_warehouse)
+    return call_execute_interactive_plot_pipeline
+
+
+def make_call_execute_currency_to_postgres_pipeline(sj_cfg, postgres_warehouse):
+    def call_execute_currency_to_postgres_pipeline():
+        execute_currency_to_postgres_pipeline(sj_cfg, postgres_warehouse)
+    return call_execute_currency_to_postgres_pipeline
+
+
+def make_call_execute_create_sales_data_postgres_pipeline(sj_cfg, postgres_warehouse):
+    def call_execute_create_sales_data_postgres_pipeline():
+        execute_create_sales_data_postgres_pipeline(sj_cfg, postgres_warehouse)
+    return call_execute_create_sales_data_postgres_pipeline
+
+
+def make_call_execute_create_currency_data_postgres_pipeline(cur_cfg, postgres_warehouse):
+    def call_execute_create_currency_data_postgres_pipeline():
+        execute_create_currency_data_postgres_pipeline(cur_cfg, postgres_warehouse)
+    return call_execute_create_currency_data_postgres_pipeline
+
+
+def make_call_execute_clean_sales_data_postgres_pipeline(sj_cfg, postgres_warehouse):
+    def call_execute_clean_sales_data_postgres_pipeline():
+        execute_clean_sales_data_postgres_pipeline(sj_cfg, postgres_warehouse)
+    return call_execute_clean_sales_data_postgres_pipeline
+
+
+def make_call_execute_clean_currency_data_postgres_pipeline(cur_cfg, postgres_warehouse):
+    def call_execute_clean_currency_data_postgres_pipeline():
+        execute_clean_currency_data_postgres_pipeline(cur_cfg, postgres_warehouse)
+    return call_execute_clean_currency_data_postgres_pipeline
+
+
+def main():
+
+    # load app config
+    (app_cfg, plotly_cfg) = get_app_config(sys.argv[0], sys.argv[1:])
+
+    sj_config = app_cfg['sales_journal']
 
     # resource entries for environment_dict
     postgres_warehouse = {'config': {'postgres_cfg': app_cfg['postgresdb']}}
 
+    call_execute_csv_to_postgres_pipeline = \
+        make_call_execute_csv_to_postgres_pipeline(sj_config, postgres_warehouse)
 
-    def call_execute_csv_to_postgres_pipeline():
-        execute_csv_to_postgres_pipeline(app_cfg['sales_journal'], postgres_warehouse)
+    call_execute_csv_currency_to_postgres_pipeline = \
+        make_call_execute_csv_currency_to_postgres_pipeline(sj_config, postgres_warehouse)
 
-    def call_execute_csv_currency_to_postgres_pipeline():
-        raise NotImplementedError('All plots functionality is not yet fully supported')
-        execute_csv_currency_to_postgres_pipeline(app_cfg['sales_journal'], postgres_warehouse)
+    call_execute_interactive_plot_pipeline = \
+        make_call_execute_interactive_plot_pipeline(sj_config, plotly_cfg, postgres_warehouse)
 
-    def call_execute_interactive_plot_pipeline():
-        interactive_plot(app_cfg['sales_journal'], plotly_cfg, postgres_warehouse)
+    call_execute_currency_to_postgres_pipeline = \
+        make_call_execute_currency_to_postgres_pipeline(sj_config, postgres_warehouse)
 
-    def call_execute_currency_to_postgres_pipeline():
-        execute_currency_to_postgres_pipeline(app_cfg['sales_journal'], postgres_warehouse)
+    call_execute_create_sales_data_postgres_pipeline = \
+        make_call_execute_create_sales_data_postgres_pipeline(sj_config, postgres_warehouse)
 
-    def call_execute_create_sales_data_postgres_pipeline():
-        execute_create_sales_data_postgres_pipeline(app_cfg['sales_journal'], postgres_warehouse)
+    call_execute_create_currency_data_postgres_pipeline = \
+        make_call_execute_create_currency_data_postgres_pipeline(sj_config['currency'], postgres_warehouse)
 
-    def call_execute_create_currency_data_postgres_pipeline():
-        execute_create_currency_data_postgres_pipeline(app_cfg['sales_journal']['currency'], postgres_warehouse)
+    call_execute_clean_sales_data_postgres_pipeline = \
+        make_call_execute_clean_sales_data_postgres_pipeline(sj_config, postgres_warehouse)
 
-    def call_execute_clean_sales_data_postgres_pipeline():
-        execute_clean_sales_data_postgres_pipeline(app_cfg['sales_journal'], postgres_warehouse)
-
-    def call_execute_clean_currency_data_postgres_pipeline():
-        execute_clean_currency_data_postgres_pipeline(app_cfg['sales_journal']['currency'], postgres_warehouse)
+    call_execute_clean_currency_data_postgres_pipeline = \
+        make_call_execute_clean_currency_data_postgres_pipeline(sj_config['currency'], postgres_warehouse)
 
 
     pipeline = 'menu'
-    if 'pipeline' in app_cfg['sales_journal']:
-        pipeline = app_cfg['sales_journal']['pipeline'].lower()
+    if 'pipeline' in sj_config:
+        pipeline = sj_config['pipeline'].lower()
     if pipeline == 'menu':
         menu = Menu()
         menu.set_options([
@@ -328,8 +418,5 @@ def main():
         call_execute_clean_currency_data_postgres_pipeline()
 
 
-
-
 if __name__ == '__main__':
-
     main()
